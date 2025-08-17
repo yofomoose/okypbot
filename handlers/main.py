@@ -4,7 +4,7 @@
 import logging
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.fsm.context import FSMContext
 
 from database.models import db
@@ -168,9 +168,36 @@ async def process_issue_title(message: Message, state: FSMContext):
 
 @router.message(IssueStates.waiting_for_description)
 async def process_issue_description(message: Message, state: FSMContext):
-    """Создание заявки"""
+    """Создание заявки с ML классификацией"""
     await state.update_data(description=message.text)
     data = await state.get_data()
+    
+    # Показываем процесс обработки
+    processing_msg = await message.answer("🤖 Анализирую заявку и создаю...")
+    
+    # ML классификация (импорт здесь чтобы избежать ошибок если ML не установлен)
+    try:
+        from services.ml_service import ml_service
+        
+        # Классифицируем заявку
+        ml_result = await ml_service.classify_issue(
+            issue_text=f"{data['title']} {data['description']}",
+            user_id=message.from_user.id
+        )
+        
+        ml_category = ml_result.get('category', 'Другое')
+        ml_confidence = ml_result.get('confidence', 0.0)
+        
+        logger.info(f"ML классификация: {ml_category} (уверенность: {ml_confidence:.2f})")
+        
+    except ImportError:
+        logger.info("ML модуль недоступен, пропускаем классификацию")
+        ml_category = None
+        ml_confidence = 0.0
+    except Exception as e:
+        logger.error(f"Ошибка ML классификации: {e}")
+        ml_category = None
+        ml_confidence = 0.0
     
     async with OkdeskAPI() as okdesk:
         try:
@@ -180,6 +207,12 @@ async def process_issue_description(message: Message, state: FSMContext):
             description += f"\nПользователь ID: {message.from_user.id}"
             if message.from_user.username:
                 description += f"\nUsername: @{message.from_user.username}"
+            
+            # Добавляем ML информацию если доступна
+            if ml_category:
+                description += f"\n\n🤖 ML Классификация: {ml_category}"
+                if ml_confidence > 0:
+                    description += f" (уверенность: {ml_confidence:.1%})"
             
             # Получаем информацию о зарегистрированном пользователе
             user = db.get_user(message.from_user.id)
@@ -214,7 +247,8 @@ async def process_issue_description(message: Message, state: FSMContext):
                     user_id=message.from_user.id,
                     initial_status=status_name
                 )
-                
+            
+            # Формируем сообщение с результатом
             success_message = (
                 f"✅ Заявка создана!\n\n"
                 f"Номер: #{issue.get('id')}\n"
@@ -223,16 +257,26 @@ async def process_issue_description(message: Message, state: FSMContext):
                 f"Описание: {data['description'][:100]}{'...' if len(data['description']) > 100 else ''}\n"
             )
             
+            # Добавляем ML информацию в ответ
+            if ml_category and ml_confidence > 0.3:
+                success_message += f"\n🤖 Категория: {ml_category}"
+                if ml_confidence >= 0.8:
+                    success_message += " ✅"
+                elif ml_confidence >= 0.6:
+                    success_message += " ⚠️"
+                else:
+                    success_message += " ❓"
+            
             # Добавляем информацию о привязке к контакту
             if user and user.okdesk_contact_id:
                 success_message += f"\n👤 Привязана к контакту: ID {user.okdesk_contact_id}\n"
             
             success_message += "\n🔔 Вы будете получать уведомления об изменении статуса заявки"
                 
-            await message.answer(success_message)
+            await processing_msg.edit_text(success_message)
             
         except Exception as e:
-            await message.answer(f"❌ Ошибка при создании заявки: {str(e)}")
+            await processing_msg.edit_text(f"❌ Ошибка при создании заявки: {str(e)}")
     
     await state.clear()
 
@@ -290,3 +334,105 @@ async def show_contacts(callback: CallbackQuery, **kwargs):
         await callback.message.edit_text(f"❌ Ошибка при получении контактов: {str(e)}")
     finally:
         await okdesk.close()
+
+@router.callback_query(F.data == "ml_classify")
+@check_registration
+async def start_ml_classification(callback: CallbackQuery, state: FSMContext, **kwargs):
+    """Запуск ML классификации"""
+    await callback.answer()
+    
+    try:
+        from services.ml_service import ml_service
+        
+        # Проверяем статус ML сервиса
+        stats = ml_service.get_statistics()
+        service_status = stats.get('service_status', 'inactive')
+        
+        if service_status != 'active':
+            await callback.message.edit_text(
+                "🤖 <b>ML Классификатор</b>\n\n"
+                "⚠️ Сервис машинного обучения недоступен.\n"
+                "Возможные причины:\n"
+                "• Не установлены ML библиотеки\n"
+                "• Ошибка инициализации модели\n\n"
+                "Обратитесь к администратору.",
+                parse_mode="HTML",
+                reply_markup=get_back_to_menu_keyboard()
+            )
+            return
+        
+        # Показываем информацию о классификаторе
+        classifier_info = stats.get('classifier', {})
+        categories_count = classifier_info.get('categories_count', 0)
+        is_trained = classifier_info.get('is_trained', False)
+        
+        response = (
+            "🤖 <b>ML Классификатор заявок</b>\n\n"
+            f"📊 Статус: {'🟢 Активен' if is_trained else '🔴 Не обучен'}\n"
+            f"📋 Категорий: {categories_count}\n\n"
+            "💡 Отправьте текст заявки, и я определю её категорию с указанием уверенности.\n\n"
+            "<i>Это поможет правильно классифицировать заявку перед отправкой в Okdesk.</i>"
+        )
+        
+        await callback.message.edit_text(
+            response,
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="📝 Классифицировать текст", 
+                        callback_data="start_classification"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="📊 Статистика ML", 
+                        callback_data="ml_stats"
+                    )
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="🏠 В меню", 
+                        callback_data="menu"
+                    )
+                ]
+            ])
+        )
+        
+    except ImportError:
+        await callback.message.edit_text(
+            "🤖 <b>ML Классификатор</b>\n\n"
+            "❌ ML модуль не установлен.\n"
+            "Для использования классификатора установите зависимости:\n"
+            "<code>pip install scikit-learn numpy joblib</code>",
+            parse_mode="HTML",
+            reply_markup=get_back_to_menu_keyboard()
+        )
+    except Exception as e:
+        logger.error(f"Ошибка запуска ML классификации: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка запуска классификатора",
+            reply_markup=get_back_to_menu_keyboard()
+        )
+
+@router.callback_query(F.data == "start_classification")
+async def redirect_to_classification(callback: CallbackQuery, state: FSMContext):
+    """Перенаправление на классификацию"""
+    await callback.answer()
+    
+    # Импортируем и вызываем обработчик из ml_handlers
+    try:
+        from handlers.ml_handlers import cmd_classify
+        # Создаем фейковое сообщение для вызова команды
+        fake_message = type('obj', (object,), {
+            'answer': callback.message.edit_text,
+            'from_user': callback.from_user
+        })()
+        
+        await cmd_classify(fake_message, state)
+    except Exception as e:
+        logger.error(f"Ошибка перенаправления на классификацию: {e}")
+        await callback.message.edit_text(
+            "❌ Ошибка запуска классификации",
+            reply_markup=get_back_to_menu_keyboard()
+        )

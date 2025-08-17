@@ -10,6 +10,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN
 from handlers.main import router as main_router
 from handlers.registration import router as registration_router
+from handlers.ml_handlers import router as ml_router
 from services.issue_monitor import IssueStatusMonitor, set_monitor
 
 # Настройка логирования
@@ -25,12 +26,23 @@ async def main():
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
     
+    # Инициализация ML сервиса
+    try:
+        from services.ml_service import ml_service
+        await ml_service.initialize()
+        logger.info("ML сервис инициализирован")
+    except ImportError:
+        logger.warning("ML библиотеки не установлены, ML функции недоступны")
+    except Exception as e:
+        logger.error(f"Ошибка инициализации ML сервиса: {e}")
+    
     # Инициализация мониторинга статусов заявок
     monitor = IssueStatusMonitor(bot)
     set_monitor(monitor)  # Устанавливаем глобальный экземпляр
     
     # Подключение роутеров с обработчиками
     dp.include_router(registration_router)  # Сначала регистрация
+    dp.include_router(ml_router)  # ML функции
     dp.include_router(main_router)  # Потом основные функции
     
     logger.info("Бот запущен")

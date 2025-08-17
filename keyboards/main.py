@@ -11,7 +11,8 @@ def get_main_menu() -> InlineKeyboardMarkup:
             InlineKeyboardButton(text="➕ Создать заявку", callback_data="create_issue")
         ],
         [
-            InlineKeyboardButton(text="👥 Контакты", callback_data="contacts")
+            InlineKeyboardButton(text="🤖 Классификатор", callback_data="ml_classify"),
+            InlineKeyboardButton(text="👤 Профиль", callback_data="profile")
         ]
     ])
     return keyboard
