@@ -18,6 +18,11 @@ class IssueStates(StatesGroup):
     waiting_for_company_search = State()
     waiting_for_contact_search = State()
 
+class IssueCreationStates(StatesGroup):
+    """Состояния для создания заявок с ML классификацией"""
+    waiting_for_description = State()
+    confirming_issue = State()
+
 class SearchStates(StatesGroup):
     """Состояния для поиска"""
     waiting_for_search_query = State()

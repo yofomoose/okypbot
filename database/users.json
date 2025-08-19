@@ -11,5 +11,18 @@
     "okdesk_issue_id": null,
     "is_registered": true,
     "registration_date": "2025-08-16T19:54:00.629238"
+  },
+  "5250167689": {
+    "telegram_id": 5250167689,
+    "full_name": "Кузьменко Александр Петрович",
+    "phone": "+79960753776",
+    "user_type": "individual",
+    "position": null,
+    "company_inn": null,
+    "okdesk_contact_id": 18,
+    "okdesk_company_id": null,
+    "okdesk_issue_id": null,
+    "is_registered": true,
+    "registration_date": "2025-08-19T19:01:49.780520"
   }
 }

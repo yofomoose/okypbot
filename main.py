@@ -11,6 +11,8 @@ from config import BOT_TOKEN
 from handlers.main import router as main_router
 from handlers.registration import router as registration_router
 from handlers.ml_handlers import router as ml_router
+from handlers.feedback_handlers import router as feedback_router
+from handlers.admin_stats import router as admin_router
 from services.issue_monitor import IssueStatusMonitor, set_monitor
 
 # Настройка логирования
@@ -22,6 +24,14 @@ logger = logging.getLogger(__name__)
 
 async def main():
     """Главная функция запуска бота"""
+    # Инициализация БД
+    try:
+        from config.db_config import init_database
+        init_database()
+        logger.info("База данных инициализирована")
+    except Exception as e:
+        logger.warning(f"Не удалось инициализировать БД: {e}")
+    
     # Инициализация бота и диспетчера
     bot = Bot(token=BOT_TOKEN)
     dp = Dispatcher(storage=MemoryStorage())
@@ -40,8 +50,82 @@ async def main():
     monitor = IssueStatusMonitor(bot)
     set_monitor(monitor)  # Устанавливаем глобальный экземпляр
     
+    # Инициализация Okdesk сервиса
+    try:
+        from services.okdesk_service import initialize_issue_service
+        from config import OKDESK_API_TOKEN, OKDESK_BASE_URL
+        
+        # Инициализируем issue service с реальными токенами
+        await initialize_issue_service(
+            api_key=OKDESK_API_TOKEN,
+            company_id="",  # Можно оставить пустым, если не используется
+            base_url=OKDESK_BASE_URL
+        )
+        logger.info("Okdesk сервис инициализирован")
+    except ImportError:
+        logger.warning("Модуль okdesk_service недоступен")
+    except Exception as e:
+        logger.error(f"Ошибка инициализации Okdesk сервиса: {e}")
+
+    # Инициализация мониторинга комментариев (ПОСЛЕ Okdesk сервиса)
+    comment_monitor = None
+    try:
+        from services.comment_monitor_service import initialize_comment_monitor
+        from services.okdesk_service import get_issue_service
+        from database.models import db
+        
+        issue_service = get_issue_service()
+        if issue_service:
+            comment_monitor = initialize_comment_monitor(
+                okdesk_service=issue_service.okdesk_service,
+                bot=bot, 
+                database_service=db
+            )
+            logger.info("Мониторинг комментариев инициализирован")
+        else:
+            logger.warning("Okdesk сервис недоступен, мониторинг комментариев отключен")
+    except Exception as e:
+        logger.error(f"Ошибка инициализации мониторинга комментариев: {e}")
+    
+    # Инициализация админ сервиса
+    try:
+        from services.admin_service import AdminNotificationService, set_admin_service
+        admin_service = AdminNotificationService(bot)
+        set_admin_service(admin_service)
+        logger.info("Админ сервис инициализирован")
+    except Exception as e:
+        logger.error(f"Ошибка инициализации админ сервиса: {e}")
+    
+    # Инициализация сервиса обучения
+    try:
+        from services.ml_training_service import MLTrainingService, set_training_service
+        training_service = MLTrainingService()
+        set_training_service(training_service)
+        logger.info("Сервис обучения ML инициализирован")
+    except Exception as e:
+        logger.error(f"Ошибка инициализации сервиса обучения: {e}")
+    
     # Подключение роутеров с обработчиками
     dp.include_router(registration_router)  # Сначала регистрация
+    dp.include_router(feedback_router)  # Обратная связь по ML
+    
+    # Подключаем обработчики комментариев
+    try:
+        from handlers.comment_handlers import router as comment_router
+        dp.include_router(comment_router)
+        logger.info("Обработчики комментариев подключены")
+    except ImportError as e:
+        logger.warning(f"Обработчики комментариев недоступны: {e}")
+    
+    # Подключаем админ роутер
+    try:
+        from handlers.admin_handlers import router as admin_handlers_router
+        dp.include_router(admin_handlers_router)
+        logger.info("Админ обработчики подключены")
+    except ImportError as e:
+        logger.warning(f"Админ обработчики недоступны: {e}")
+    
+    dp.include_router(admin_router)  # Админ функции
     dp.include_router(ml_router)  # ML функции
     dp.include_router(main_router)  # Потом основные функции
     
@@ -49,18 +133,28 @@ async def main():
     
     try:
         # Запуск мониторинга в фоновом режиме
+        tasks = []
+        
+        # Мониторинг статусов заявок
         monitor_task = asyncio.create_task(monitor.start_monitoring())
+        tasks.append(monitor_task)
+        
+        # Мониторинг комментариев (если инициализирован)
+        if comment_monitor:
+            comment_monitor_task = asyncio.create_task(comment_monitor.start_monitoring())
+            tasks.append(comment_monitor_task)
+            logger.info("Запущен мониторинг комментариев")
         
         # Запуск polling
         await dp.start_polling(bot)
     except Exception as e:
         logger.error(f"Ошибка при работе бота: {e}")
     finally:
-        # Остановка мониторинга
-        if 'monitor_task' in locals():
-            monitor_task.cancel()
+        # Остановка всех задач мониторинга
+        for task in tasks:
+            task.cancel()
             try:
-                await monitor_task
+                await task
             except asyncio.CancelledError:
                 pass
         

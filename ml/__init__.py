@@ -2,6 +2,10 @@
 ML модуль для классификации заявок
 """
 
-from .classifier import IssueClassifier
+from .classifier import TextClassifier
+from .advanced_custom_model import AdvancedCustomModelAdapter
 
-__all__ = ['IssueClassifier']
+# Совместимость с предыдущим именем
+IssueClassifier = TextClassifier
+
+__all__ = ['TextClassifier', 'IssueClassifier', 'AdvancedCustomModelAdapter']

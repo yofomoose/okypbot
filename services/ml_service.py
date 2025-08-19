@@ -4,10 +4,11 @@
 
 import asyncio
 import logging
+import time
 from typing import Dict, List, Tuple, Optional
 from datetime import datetime
 
-from ml.classifier import IssueClassifier
+from ml.classifier import TextClassifier
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +16,7 @@ class MLService:
     """Сервис для работы с ML классификацией заявок"""
     
     def __init__(self):
-        self.classifier = IssueClassifier()
+        self.classifier = TextClassifier()
         self.is_initialized = False
         self.classification_history = []
         self.max_history_size = 1000
@@ -39,15 +40,17 @@ class MLService:
     
     async def classify_issue(self, issue_text: str, user_id: int = None) -> Dict:
         """
-        Классификация текста заявки
+        Классификация текста заявки с сохранением в БД
         
         Args:
             issue_text: Текст заявки
             user_id: ID пользователя (для статистики)
             
         Returns:
-            Dict с результатами классификации
+            Dict с результатами классификации и ID записи в БД
         """
+        start_time = time.time()
+        
         if not issue_text or not issue_text.strip():
             return {
                 'category': 'Другое',
@@ -58,6 +61,7 @@ class MLService:
         try:
             # Классифицируем
             category, confidence = await self.classifier.classify(issue_text)
+            processing_time = time.time() - start_time
             
             # Определяем рекомендации
             recommendations = self._get_recommendations(category, confidence)
@@ -69,16 +73,34 @@ class MLService:
                 'text': issue_text[:100] + '...' if len(issue_text) > 100 else issue_text,
                 'category': category,
                 'confidence': confidence,
-                'recommendations': recommendations
+                'recommendations': recommendations,
+                'processing_time': processing_time
             }
             
             self._add_to_history(classification_result)
+            
+            # Сохраняем в БД (если доступно)
+            classification_id = None
+            try:
+                from services.ml_stats_service import ml_stats_service
+                classification_id = ml_stats_service.save_classification(
+                    text=issue_text,
+                    predicted_category=category,
+                    confidence=confidence,
+                    user_id=user_id or 0,
+                    telegram_user_id=user_id or 0,
+                    processing_time=processing_time
+                )
+            except Exception as db_error:
+                logger.warning(f"Не удалось сохранить в БД: {db_error}")
             
             return {
                 'category': category,
                 'confidence': confidence,
                 'recommendations': recommendations,
-                'success': True
+                'success': True,
+                'classification_id': classification_id,
+                'processing_time': processing_time
             }
             
         except Exception as e:
@@ -184,6 +206,14 @@ class MLService:
     def get_categories(self) -> List[str]:
         """Получить список доступных категорий"""
         return self.classifier.get_categories()
+    
+    def enable_lightgbm(self) -> bool:
+        """Включить LightGBM модель"""
+        return self.classifier.enable_lgb_model()
+    
+    def disable_lightgbm(self) -> bool:
+        """Отключить LightGBM модель (использовать KNN)"""
+        return self.classifier.disable_lgb_model()
     
     def get_statistics(self) -> Dict:
         """Получить статистику работы ML сервиса"""

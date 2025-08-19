@@ -13,15 +13,33 @@ from keyboards.registration import get_user_type_keyboard
 from api.okdesk_api import OkdeskAPI
 from states.registration import IssueStates, RegistrationStates
 from services.issue_monitor import get_monitor
+from config import ADMIN_IDS
 
 logger = logging.getLogger(__name__)
 
 router = Router()
 
+def is_admin(user_id: int) -> bool:
+    """Проверяет, является ли пользователь админом"""
+    return user_id in ADMIN_IDS
+
+# Регистрируем обработчики из issue_handlers, если модуль доступен
+try:
+    from handlers.issue_handlers import router as issue_router
+    router.include_router(issue_router)
+    logger.info("Обработчики создания заявок подключены")
+except ImportError:
+    logger.warning("Модуль issue_handlers недоступен, используется базовая функциональность")
+
 def check_registration(func):
-    """Декоратор для проверки регистрации пользователя"""
+    """Декоратор для проверки регистрации пользователя (админы пропускаются)"""
     async def wrapper(event, *args, **kwargs):
         user_id = event.from_user.id
+        
+        # Админы проходят без проверки регистрации
+        if is_admin(user_id):
+            return await func(event, *args, **kwargs)
+        
         if not db.is_user_registered(user_id):
             if isinstance(event, Message):
                 await event.answer(
@@ -39,6 +57,17 @@ def check_registration(func):
 async def cmd_start(message: Message, state: FSMContext):
     """Обработчик команды /start"""
     user_id = message.from_user.id
+    
+    # Админы проходят сразу в главное меню
+    if is_admin(user_id):
+        await message.answer(
+            f"🔧 Добро пожаловать, администратор!\n\n"
+            f"👤 Ваш ID: {user_id}\n"
+            f"🤖 У вас есть доступ к функциям управления ML системой.\n\n"
+            "Выберите действие:",
+            reply_markup=get_main_menu()
+        )
+        return
     
     if not db.is_user_registered(user_id):
         await message.answer(
@@ -61,6 +90,8 @@ async def cmd_start(message: Message, state: FSMContext):
 @router.message(Command("help"))
 async def cmd_help(message: Message):
     """Обработчик команды /help"""
+    user_id = message.from_user.id
+    
     help_text = """
 🔹 /start - Главное меню
 🔹 /help - Справка
@@ -78,7 +109,87 @@ async def cmd_help(message: Message):
 • Обновление статусов заявок
 • Добавление комментариев
     """
+    
+    # Добавляем админские команды для админов
+    if is_admin(user_id):
+        help_text += """
+        
+🔧 Команды администратора:
+🔹 /admin - Панель администратора
+🔹 /stats - Статистика ML классификации
+        """
+    
     await message.answer(help_text)
+
+@router.message(Command("admin"))
+async def cmd_admin(message: Message):
+    """Панель администратора"""
+    user_id = message.from_user.id
+    
+    if not is_admin(user_id):
+        await message.answer("❌ У вас нет прав администратора")
+        return
+    
+    admin_text = f"""
+🔧 <b>Панель администратора</b>
+
+👤 Ваш ID: <code>{user_id}</code>
+✅ Права администратора подтверждены
+
+📊 Доступные функции:
+• Получение уведомлений о классификации заявок
+• Подтверждение правильности ML классификации  
+• Исправление неправильной классификации
+• Обучение модели на основе обратной связи
+• Обновление категорий заявок в CRM
+
+ℹ️ Уведомления приходят автоматически при создании заявок.
+    """
+    
+    await message.answer(admin_text, parse_mode="HTML")
+
+@router.message(Command("stats"))
+async def cmd_stats(message: Message):
+    """Статистика ML классификации для админов"""
+    user_id = message.from_user.id
+    
+    if not is_admin(user_id):
+        await message.answer("❌ У вас нет прав администратора")
+        return
+    
+    try:
+        from services.ml_stats_service import MLStatsService
+        ml_stats = MLStatsService()
+        
+        stats = await ml_stats.get_classification_stats()
+        
+        if stats:
+            stats_text = f"""
+📊 <b>Статистика ML классификации</b>
+
+📈 Общие показатели:
+• Всего классификаций: {stats.get('total_classifications', 0)}
+• Правильных: {stats.get('correct_classifications', 0)}
+• Неправильных: {stats.get('incorrect_classifications', 0)}
+• Точность: {stats.get('accuracy', 0):.1%}
+
+🤖 Обратная связь:
+• Подтверждений админов: {stats.get('admin_confirmations', 0)}
+• Исправлений: {stats.get('admin_corrections', 0)}
+• Пользовательская обратная связь: {stats.get('user_feedback', 0)}
+
+📅 За последние 24 часа:
+• Новых классификаций: {stats.get('recent_classifications', 0)}
+• Средняя уверенность: {stats.get('avg_confidence', 0):.1%}
+            """
+        else:
+            stats_text = "📊 Статистика пока не доступна"
+            
+        await message.answer(stats_text, parse_mode="HTML")
+        
+    except Exception as e:
+        logger.error(f"Ошибка получения статистики: {e}")
+        await message.answer("❌ Ошибка получения статистики")
 
 @router.message(Command("profile"))
 @check_registration
@@ -153,11 +264,18 @@ async def show_issues(callback: CallbackQuery, **kwargs):
 
 @router.callback_query(F.data == "create_issue")
 @check_registration
-async def start_create_issue(callback: CallbackQuery, state: FSMContext, **kwargs):
-    """Начать создание заявки"""
+async def handle_create_issue_button(callback: CallbackQuery, state: FSMContext, **kwargs):
+    """Обработчик кнопки создания заявки с ML классификацией"""
     await callback.answer()
-    await callback.message.edit_text("📝 Введите название заявки:")
-    await state.set_state(IssueStates.waiting_for_title)
+    
+    # Импортируем обработчик из issue_handlers
+    try:
+        from handlers.issue_handlers import start_issue_creation
+        await start_issue_creation(callback.message, state)
+    except ImportError:
+        # Fallback к старой логике если issue_handlers недоступен
+        await callback.message.edit_text("📝 Введите название заявки:")
+        await state.set_state(IssueStates.waiting_for_title)
 
 @router.message(IssueStates.waiting_for_title)
 async def process_issue_title(message: Message, state: FSMContext):
@@ -175,18 +293,16 @@ async def process_issue_description(message: Message, state: FSMContext):
     # Показываем процесс обработки
     processing_msg = await message.answer("🤖 Анализирую заявку и создаю...")
     
-    # ML классификация (импорт здесь чтобы избежать ошибок если ML не установлен)
+    # ML классификация - используем напрямую TextClassifier
     try:
-        from services.ml_service import ml_service
+        from ml.classifier import TextClassifier
+        
+        # Создаем классификатор
+        classifier = TextClassifier()
         
         # Классифицируем заявку
-        ml_result = await ml_service.classify_issue(
-            issue_text=f"{data['title']} {data['description']}",
-            user_id=message.from_user.id
-        )
-        
-        ml_category = ml_result.get('category', 'Другое')
-        ml_confidence = ml_result.get('confidence', 0.0)
+        full_text = f"{data['title']} {data['description']}"
+        ml_category, ml_confidence = await classifier.classify(full_text)
         
         logger.info(f"ML классификация: {ml_category} (уверенность: {ml_confidence:.2f})")
         
@@ -209,10 +325,11 @@ async def process_issue_description(message: Message, state: FSMContext):
                 description += f"\nUsername: @{message.from_user.username}"
             
             # Добавляем ML информацию если доступна
+            # Добавляем ML результаты в описание
             if ml_category:
                 description += f"\n\n🤖 ML Классификация: {ml_category}"
                 if ml_confidence > 0:
-                    description += f" (уверенность: {ml_confidence:.1%})"
+                    description += f" (уверенность: {ml_confidence:.2f})"
             
             # Получаем информацию о зарегистрированном пользователе
             user = db.get_user(message.from_user.id)
@@ -435,4 +552,46 @@ async def redirect_to_classification(callback: CallbackQuery, state: FSMContext)
         await callback.message.edit_text(
             "❌ Ошибка запуска классификации",
             reply_markup=get_back_to_menu_keyboard()
+        )
+
+@router.callback_query(F.data == "quick_issue_info") 
+async def handle_quick_issue_info(callback: CallbackQuery):
+    """Показывает информацию о быстром создании заявки"""
+    await callback.answer()
+    
+    info_text = (
+        "⚡ <b>Быстрое создание заявки</b>\n\n"
+        "Используйте команду:\n"
+        "<code>/quick_issue Описание проблемы</code>\n\n"
+        "Примеры:\n"
+        "• <code>/quick_issue Принтер не печатает документы</code>\n"
+        "• <code>/quick_issue Компьютер завис, нужна помощь</code>\n"
+        "• <code>/quick_issue Проблемы с интернетом в офисе</code>\n\n"
+        "🤖 Заявка будет автоматически классифицирована с помощью ИИ!"
+    )
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎫 Создать заявку (подробно)", callback_data="create_issue")],
+        [InlineKeyboardButton(text="🔙 Назад в меню", callback_data="menu")]
+    ])
+    
+    await callback.message.edit_text(
+        info_text,
+        parse_mode="HTML", 
+        reply_markup=keyboard
+    )
+
+# Добавляем команду быстрого создания заявки
+@router.message(Command("quick_issue"))
+@check_registration
+async def cmd_quick_issue(message: Message, **kwargs):
+    """Быстрое создание заявки через команду"""
+    # Импортируем обработчик из issue_handlers
+    try:
+        from handlers.issue_handlers import cmd_quick_issue as quick_issue_handler
+        await quick_issue_handler(message)
+    except ImportError:
+        await message.answer(
+            "❌ Модуль создания заявок недоступен.\n"
+            "Используйте /create_issue для создания заявки через меню."
         )

@@ -1,363 +1,550 @@
-"""
-Классификатор заявок для Okdesk бота
-Адаптированный из ML-бота для классификации заявок
-"""
-
-import asyncio
-import logging
-import pickle
-import json
+from typing import Dict, List, Tuple, Optional, Union, Any
+import numpy as np
 from pathlib import Path
-from typing import Dict, List, Tuple, Optional, Any
-from datetime import datetime
+import pickle
+import logging
+import tempfile
+import shutil
+import os
 import re
+import hashlib
+from datetime import datetime, timedelta
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.preprocessing import LabelEncoder
+from sklearn.exceptions import NotFittedError
 
-# Для ML модели (будем устанавливать при необходимости)
-try:
-    import numpy as np
-    from sklearn.feature_extraction.text import TfidfVectorizer
-    from sklearn.linear_model import LogisticRegression
-    from sklearn.pipeline import Pipeline
-    import joblib
-except ImportError:
-    # Заглушки если библиотеки не установлены
-    np = None
-    TfidfVectorizer = None
-    LogisticRegression = None
-    Pipeline = None
-    joblib = None
+def normalize_text(text: str) -> str:
+    """Нормализует текст для стабильной классификации"""
+    if not text:
+        return ""
+    
+    # Удаляем лишние пробелы и переводы строк
+    text = re.sub(r'\s+', ' ', text.strip())
+    
+    # Удаляем многоточия в конце и начале
+    text = re.sub(r'\.{2,}', '', text)
+    
+    # Удаляем специальные символы в конце текста (например, обрезку "...")
+    text = re.sub(r'[\.]{2,}$', '', text)
+    text = re.sub(r'…+', '', text)
+    
+    # Убираем обрезанные слова в конце (заканчивающиеся не на полную букву)
+    # Например: "красная ла..." → "красная"
+    words = text.split()
+    if words and len(words[-1]) < 3 and not words[-1].isdigit():
+        words = words[:-1]
+    
+    text = ' '.join(words).strip()
+    
+    # Приводим к нижнему регистру для нормализации
+    text = text.lower()
+    
+    return text
+
+def get_text_hash(text: str) -> str:
+    """Создает хеш для текста для кеширования"""
+    normalized = normalize_text(text)
+    return hashlib.md5(normalized.encode('utf-8')).hexdigest()
+
+# Временные константы для ML
+CATEGORIES = {
+    "Техника": ["Компьютеры", "Принтеры", "Сеть"],
+    "Программы": ["ОС", "Приложения", "Драйверы"],
+    "Прочее": ["Консультация", "Прочее"]
+}
+MODEL_PATH = "ml/models"
+CONFIDENCE_THRESHOLD = 0.5
+EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+MIN_TEXT_LENGTH = 3
+
+from ml.embeddings import EmbeddingManager
 
 logger = logging.getLogger(__name__)
 
-class IssueClassifier:
-    """Классификатор заявок по категориям"""
+# Заглушка для DataEncryption
+class DataEncryption:
+    @staticmethod
+    def encrypt(data):
+        return data
     
-    def __init__(self, model_path: str = "ml/models/issue_classifier.pkl"):
-        self.model_path = Path(model_path)
-        self.model = None
-        self.categories = []
-        self.is_trained = False
-        self.confidence_threshold = 0.6
-        self.min_text_length = 10
+    @staticmethod
+    def decrypt(data):
+        return data
+
+
+
+logger = logging.getLogger(__name__)
+
+class TextClassifier:
+    def __init__(self):
+        self.embedder = EmbeddingManager()
+        self.classifier = KNeighborsClassifier(n_neighbors=5)
+        self.examples = []
+        self.label_encoder = LabelEncoder()
         
-        # Создаем директорию для моделей
-        self.model_path.parent.mkdir(parents=True, exist_ok=True)
+        # Кеш для результатов классификации
+        self.classification_cache = {}
+        self.cache_max_size = 1000  # Максимальный размер кеша
         
-        # Базовые категории для начала
-        self.default_categories = [
-            "Техническая поддержка",
-            "Проблемы с доступом", 
-            "Ошибки в работе системы",
-            "Запрос на изменение",
-            "Консультация",
-            "Жалоба",
-            "Предложение",
-            "Другое"
-        ]
+        # Счетчик пользовательских исправлений
+        self.user_corrections_count = 0
+        self._user_corrections = 0  # Добавляем недостающий атрибут
+        self._correction_threshold = 1  # Порог для отключения LightGBM
+        self.lgb_disabled_by_corrections = False
+        self.max_corrections_before_disable = 1  # Отключаем LightGBM после первого же исправления
+        self.use_lightgbm = True  # Флаг использования LightGBM
+        
+        # Интеграция с LightGBM моделью
+        self.lgb_adapter = None
+        self._initialize_advanced_model()
+        
+        self.load_examples()
+        self.last_save = datetime.now()
+        self.save_interval = timedelta(minutes=5)  # Сохраняем каждые 5 минут
+        self.backup_dir = Path(MODEL_PATH) / "backups"
+        self.backup_dir.mkdir(exist_ok=True)
     
-    async def initialize(self) -> bool:
-        """Инициализация модели"""
+    def _initialize_advanced_model(self):
+        """Инициализирует продвинутую LightGBM модель"""
         try:
-            if self.model_path.exists():
-                await self.load_model()
+            from .advanced_custom_model import AdvancedCustomModelAdapter
+            
+            self.lgb_adapter = AdvancedCustomModelAdapter()
+            models_path = "ml/models"
+            
+            if self.lgb_adapter.load_user_model(models_path):
+                logger.info("LightGBM модель успешно интегрирована")
+                
+                # Получаем информацию о модели
+                model_info = self.lgb_adapter.get_model_info()
+                logger.info(f"LightGBM модель: {model_info}")
+                
             else:
-                logger.info("Модель не найдена, создаем базовую модель")
-                await self.create_basic_model()
-            return True
+                logger.info("LightGBM модель не найдена, используем базовую реализацию")
+                self.lgb_adapter = None
+                
+        except Exception as e:
+            logger.warning(f"Не удалось загрузить LightGBM модель: {e}")
+            self.lgb_adapter = None
+
+    async def initialize(self) -> bool:
+        """Асинхронная инициализация классификатора"""
+        try:
+            logger.info("Инициализация TextClassifier...")
+            # Загружаем примеры
+            self.load_examples()
+            
+            # Пробуем инициализировать LightGBM модель
+            self._initialize_advanced_model()
+            
+            # Проверяем состояние
+            if self.lgb_adapter and self.lgb_adapter.model:
+                logger.info("Классификатор инициализирован с LightGBM моделью")
+                return True
+            elif self.examples:
+                logger.info("Классификатор инициализирован с базовой моделью")
+                return True
+            else:
+                logger.warning("Классификатор инициализирован в минимальном режиме")
+                return False
+                
         except Exception as e:
             logger.error(f"Ошибка инициализации классификатора: {e}")
             return False
+
+    def get_stats(self) -> dict:
+        """Получить статистику модели"""
+        stats = {
+            "examples_count": len(self.examples),
+            "has_lgb_model": self.lgb_adapter is not None and hasattr(self.lgb_adapter, 'model') and self.lgb_adapter.model is not None,
+            "model_type": "LightGBM" if self.lgb_adapter and hasattr(self.lgb_adapter, 'model') and self.lgb_adapter.model else "KNN"
+        }
+        
+        if self.lgb_adapter:
+            model_info = self.lgb_adapter.get_model_info()
+            stats.update(model_info)
+            
+        return stats
+
+    def load_examples(self):
+        examples_file = Path(MODEL_PATH) / 'examples.pkl'
+        if examples_file.exists():
+            with open(examples_file, 'rb') as f:
+                self.examples = pickle.load(f)
+                logger.info(f"Загружено {len(self.examples)} обучающих примеров")
+
+    def encode_text(self, text: str) -> np.ndarray:
+        """Получение эмбеддинга для одного текста"""
+        if not text:
+            return np.array([])
+        return self.embedder.encode_text(text)
     
-    async def load_model(self) -> bool:
-        """Загрузка обученной модели"""
+    def encode_texts(self, texts: List[str]) -> np.ndarray:
+        """Получение эмбеддингов для списка текстов"""
+        if not texts:
+            return np.array([])
+        return self.embedder.encode_texts(texts)
+
+    async def train(self, texts: list, labels: list) -> None:
+        """Обучение модели на наборе текстов и меток"""
+        logger.info("Начало обучения модели...")
         try:
-            if not joblib:
-                logger.warning("scikit-learn не установлен, используем базовую классификацию")
-                return False
+            # Получаем эмбеддинги для всех текстов
+            X = self.encode_texts(texts)
+            
+            # Кодируем метки
+            unique_labels = sorted(set(labels))
+            self.label_encoder = {label: i for i, label in enumerate(unique_labels)}
+            y = np.array([self.label_encoder[label] for label in labels])
+            
+            # Обучаем классификатор
+            self.classifier.fit(X, y)
+            
+            # Сохраняем модель
+            await self.save_model()
+            logger.info("Модель успешно обучена и сохранена")
+            
+        except Exception as e:
+            logger.error(f"Ошибка при обучении модели: {e}")
+            raise
+
+    async def classify(self, text: str) -> tuple[str, float]:
+        """Классификация текста с интеграцией LightGBM модели и кешированием"""
+        try:
+            if not text or len(text) < MIN_TEXT_LENGTH:
+                return "Текст слишком короткий", 0.0
+            
+            # Нормализуем текст
+            normalized_text = normalize_text(text)
+            text_hash = get_text_hash(text)
+            
+            # Добавляем отладочное логирование
+            logger.info(f"Оригинальный текст: '{text[:100]}'")
+            logger.info(f"Нормализованный текст: '{normalized_text[:100]}'")
+            logger.info(f"Хеш текста: {text_hash}")
+            
+            # Проверяем кеш
+            if text_hash in self.classification_cache:
+                cached_result = self.classification_cache[text_hash]
+                logger.info(f"✅ Используем кешированный результат: {cached_result[0]} ({cached_result[1]:.3f})")
+                return cached_result
+            
+            # Логируем информацию о доступных моделях
+            has_lgb = hasattr(self, 'lgb_adapter') and self.lgb_adapter and self.lgb_adapter.model_loaded
+            lgb_status = "отключена" if self.lgb_disabled_by_corrections else "активна"
+            logger.info(f"Классифицируем текст (LightGBM: {has_lgb and not self.lgb_disabled_by_corrections} ({lgb_status}), KNN примеров: {len(self.examples)}, исправлений: {self.user_corrections_count}): {text[:50]}...")
+            
+            result = None
+            
+            # Пытаемся использовать продвинутую LightGBM модель если доступна и не отключена
+            if has_lgb and not self.lgb_disabled_by_corrections:
+                try:
+                    lgb_result = self.lgb_adapter.predict(normalized_text)
+                    if lgb_result:
+                        category, confidence = lgb_result
+                        logger.info(f"LightGBM предсказание: {category} ({confidence:.3f})")
+                        result = (category, confidence)
+                except Exception as e:
+                    logger.warning(f"Ошибка в LightGBM предсказании: {e}")
+                    
+            # Если LightGBM отключена или дала плохой результат, используем KNN
+            if not result:
+                if self.examples:
+                    logger.info("Используем KNN классификатор")
+                    # Получаем эмбеддинг текста
+                    embedding = self.encode_text(normalized_text)
+                    if embedding.size == 0:
+                        result = ("Ошибка кодирования", 0.0)
+                    else:
+                        # Находим ближайшие примеры
+                        embeddings = np.array([x['embedding'] for x in self.examples])
+                        distances = np.linalg.norm(embeddings - embedding, axis=1)
+                        
+                        nearest_idx = np.argmin(distances)
+                        confidence = float(1 / (1 + distances[nearest_idx]))
+                        
+                        result = (self.examples[nearest_idx]['category'], confidence)
+                        logger.info(f"KNN предсказание: {result[0]} ({result[1]:.3f})")
+                else:
+                    result = ("Модель не обучена", 0.0)
+            
+            # Кешируем результат
+            if result:
+                self._cache_result(text_hash, result)
+                return result
+            else:
+                fallback_result = ("Ошибка классификации", 0.0)
+                self._cache_result(text_hash, fallback_result)
+                return fallback_result
                 
-            # Загружаем в отдельном потоке
-            loop = asyncio.get_event_loop()
-            model_data = await loop.run_in_executor(
-                None, 
-                joblib.load, 
-                str(self.model_path)
-            )
+        except Exception as e:
+            logger.error(f"Ошибка при классификации: {e}")
+            return "Ошибка классификации", 0.0
+
+    def _cache_result(self, text_hash: str, result: tuple) -> None:
+        """Кеширует результат классификации"""
+        # Если кеш переполнен, удаляем старые записи
+        if len(self.classification_cache) >= self.cache_max_size:
+            # Удаляем половину кеша (простая стратегия)
+            keys_to_remove = list(self.classification_cache.keys())[:self.cache_max_size // 2]
+            for key in keys_to_remove:
+                del self.classification_cache[key]
+            logger.info(f"Очищен кеш классификации, удалено {len(keys_to_remove)} записей")
+        
+        self.classification_cache[text_hash] = result
+
+    async def get_valid_categories(self) -> List[str]:
+        """Возвращает список валидных категорий"""
+        # Используем тот же метод что и get_categories для консистентности
+        return self.get_categories()
+
+    def get_categories(self) -> List[str]:
+        """Возвращает список доступных категорий для классификации"""
+        # Если есть LightGBM модель, получаем категории из неё
+        if hasattr(self, 'lgb_adapter') and self.lgb_adapter and hasattr(self.lgb_adapter, 'get_categories'):
+            try:
+                lgb_categories = self.lgb_adapter.get_categories()
+                if lgb_categories:
+                    return lgb_categories
+            except Exception as e:
+                logger.warning(f"Ошибка получения категорий из LightGBM: {e}")
+        
+        # Иначе возвращаем стандартные категории
+        # Если CATEGORIES - это словарь, извлекаем все подкатегории
+        if isinstance(CATEGORIES, dict):
+            all_categories = []
+            for main_cat, sub_cats in CATEGORIES.items():
+                all_categories.append(main_cat)  # Добавляем основную категорию
+                if isinstance(sub_cats, list):
+                    all_categories.extend(sub_cats)  # Добавляем подкатегории
+            return all_categories
+        elif isinstance(CATEGORIES, list):
+            return CATEGORIES
+        else:
+            return []
+
+    async def get_examples_count(self) -> int:
+        """Возвращает количество обучающих примеров"""
+        return len(self.examples)
+
+    async def save_model(self) -> bool:
+        """Сохраняет модель и эмбеддинги"""
+        try:
+            # Создаем временную директорию, которая автоматически удалится после выхода из контекста
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Создаем пути к временным файлам
+                temp_model = Path(temp_dir) / "model.pkl"
+                temp_encoder = Path(temp_dir) / "label_encoder.pkl"
+                
+                # Сохраняем файлы во временную директорию
+                with open(temp_model, 'wb') as f:
+                    pickle.dump(self.classifier, f)
+                with open(temp_encoder, 'wb') as f:
+                    pickle.dump(self.label_encoder, f)
+                
+                # Создаем целевую директорию
+                os.makedirs(MODEL_PATH, exist_ok=True)
+                
+                # Перемещаем файлы в целевую директорию
+                shutil.copy2(temp_model, Path(MODEL_PATH) / 'classifier.pkl')
+                shutil.copy2(temp_encoder, Path(MODEL_PATH) / 'label_encoder.pkl')
+                
+                return True
+                
+        except Exception as e:
+            logger.error(f"Ошибка сохранения модели: {e}")
+            return False
+
+    async def load_model(self) -> bool:
+        """Загружает модель"""
+        try:
+            model_file = Path(MODEL_PATH) / 'classifier.pkl'
+            encoder_file = Path(MODEL_PATH) / 'label_encoder.pkl'
             
-            self.model = model_data['model']
-            self.categories = model_data['categories']
-            self.is_trained = True
-            
-            logger.info(f"Модель загружена, доступно категорий: {len(self.categories)}")
-            return True
+            if model_file.exists() and encoder_file.exists():
+                with open(model_file, 'rb') as f:
+                    self.classifier = pickle.load(f)
+                with open(encoder_file, 'rb') as f:
+                    self.label_encoder = pickle.load(f)
+                return True
+            return False
             
         except Exception as e:
             logger.error(f"Ошибка загрузки модели: {e}")
             return False
-    
-    async def create_basic_model(self):
-        """Создание базовой модели с примерами"""
-        if not joblib:
-            logger.warning("scikit-learn не установлен, классификация недоступна")
-            self.categories = self.default_categories
-            return
-        
-        # Базовые примеры для обучения
-        training_data = [
-            ("Не могу войти в систему", "Проблемы с доступом"),
-            ("Забыл пароль", "Проблемы с доступом"),
-            ("Система не отвечает", "Ошибки в работе системы"),
-            ("Ошибка 500", "Ошибки в работе системы"),
-            ("Нужна помощь с настройкой", "Техническая поддержка"),
-            ("Как сделать отчет", "Консультация"),
-            ("Предлагаю добавить функцию", "Предложение"),
-            ("Недоволен работой", "Жалоба"),
-            ("Изменить настройки", "Запрос на изменение"),
-        ]
-        
-        texts = [item[0] for item in training_data]
-        labels = [item[1] for item in training_data]
-        
-        # Создаем простую модель
-        self.model = Pipeline([
-            ('tfidf', TfidfVectorizer(
-                max_features=1000,
-                ngram_range=(1, 2),
-                stop_words=None  # Для русского языка можем добавить позже
-            )),
-            ('classifier', LogisticRegression(random_state=42))
-        ])
-        
-        # Обучаем
-        loop = asyncio.get_event_loop()
-        await loop.run_in_executor(None, self.model.fit, texts, labels)
-        
-        self.categories = list(set(labels))
-        self.is_trained = True
-        
-        # Сохраняем
-        await self.save_model()
-        logger.info("Базовая модель создана и обучена")
-    
-    async def save_model(self):
-        """Сохранение модели"""
-        if not self.model or not joblib:
-            return
-            
+
+    async def train(self, text: str, category: str, user_id: int) -> bool:
+        """Обучение на одном примере"""
         try:
-            model_data = {
-                'model': self.model,
-                'categories': self.categories,
-                'created_at': datetime.now().isoformat(),
-                'version': '1.0'
+            # Увеличиваем счетчик пользовательских исправлений
+            self.user_corrections_count += 1
+            logger.info(f"Пользовательское исправление #{self.user_corrections_count}: '{category}'")
+            
+            # Отключаем LightGBM после нескольких исправлений
+            if self.user_corrections_count >= self.max_corrections_before_disable and not self.lgb_disabled_by_corrections:
+                self.lgb_disabled_by_corrections = True
+                logger.warning(f"🚫 LightGBM модель отключена после {self.user_corrections_count} исправлений. Переключаемся на KNN с пользовательскими данными.")
+            
+            # Проверка валидности категории
+            valid_categories = self.get_categories()
+            if category not in valid_categories:
+                logger.warning(f"Неверная категория: {category}")
+                return False
+                
+            # Проверка длины текста
+            if len(text) < MIN_TEXT_LENGTH:
+                logger.warning(f"Текст слишком короткий: {len(text)} символов")
+                return False
+                
+            # Получаем эмбеддинг
+            embedding = self.encode_text(text)
+            if embedding.size == 0:
+                logger.error("Ошибка получения эмбеддинга")
+                return False
+                
+            # Создаем пример
+            example = {
+                'text': text,
+                'category': category, 
+                'embedding': embedding,
+                'user_id': user_id,
+                'created_at': datetime.utcnow()
             }
             
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                joblib.dump,
-                model_data,
-                str(self.model_path)
-            )
-            logger.info(f"Модель сохранена в {self.model_path}")
+            # Добавляем в примеры
+            self.examples.append(example)
+            
+            # Сохраняем примеры
+            examples_file = Path(MODEL_PATH) / 'examples.pkl'
+            with open(examples_file, 'wb') as f:
+                pickle.dump(self.examples, f)
+            
+            # Переобучаем если достаточно примеров
+            if len(self.examples) > 1:
+                X = np.array([x['embedding'] for x in self.examples])
+                y = np.array([x['category'] for x in self.examples])
+                self.classifier.fit(X, y)
+                
+                # Сохраняем обновленную модель
+                await self.save_model()
+                
+            # Очищаем все кеши, чтобы новые классификации учитывали добавленный пример
+            cache_size_before = len(self.classification_cache)
+            self.classification_cache.clear()
+            
+            # Также очищаем кеш LightGBM адаптера
+            lgb_cache_size = 0
+            if hasattr(self, 'lgb_adapter') and self.lgb_adapter and hasattr(self.lgb_adapter, 'clear_cache'):
+                lgb_cache_size = self.lgb_adapter.clear_cache()
+            
+            logger.info(f"🗑️ Очищен кеш классификации ({cache_size_before} записей) и LightGBM ({lgb_cache_size} записей) после добавления нового примера")
+                
+            logger.info(f"Добавлен новый пример категории {category}")
+            
+            # Автосохранение после обучения
+            await self.maybe_auto_save()
+            
+            return True
+            
         except Exception as e:
-            logger.error(f"Ошибка сохранения модели: {e}")
-    
-    async def classify(self, text: str) -> Tuple[str, float]:
-        """
-        Классификация текста заявки
+            logger.error(f"Ошибка при обучении: {e}")
+            return False
+
+    async def add_training_example(self, text: str, category: str, user_id: int = 0) -> bool:
+        """Добавляет обучающий пример (обёртка для метода train)
         
+        Args:
+            text: Текст для обучения
+            category: Категория
+            user_id: ID пользователя (опционально)
+            
         Returns:
-            Tuple[str, float]: (категория, уверенность)
+            bool: Успешность добавления
         """
-        if not text or len(text.strip()) < self.min_text_length:
-            return "Другое", 0.0
-        
-        # Предобработка текста
-        processed_text = self._preprocess_text(text)
-        
-        if not self.is_trained or not self.model:
-            # Базовая классификация по ключевым словам
-            return self._basic_classify(processed_text)
-        
+        return await self.train(text, category, user_id)
+
+    def enable_lgb_model(self) -> bool:
+        """Включает LightGBM модель обратно"""
         try:
-            # ML классификация
-            loop = asyncio.get_event_loop()
-            
-            # Предсказание
-            prediction = await loop.run_in_executor(
-                None,
-                self.model.predict,
-                [processed_text]
-            )
-            
-            # Получаем вероятности
-            probabilities = await loop.run_in_executor(
-                None,
-                self.model.predict_proba,
-                [processed_text]
-            )
-            
-            category = prediction[0]
-            confidence = float(max(probabilities[0]))
-            
-            logger.info(f"Классификация: '{category}' с уверенностью {confidence:.2f}")
-            return category, confidence
+            if hasattr(self, 'lgb_adapter') and self.lgb_adapter and self.lgb_adapter.model:
+                self.lgb_adapter.model_loaded = True
+                logger.info("LightGBM модель включена обратно")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Ошибка включения LightGBM модели: {e}")
+            return False
+
+    def disable_lgb_model(self) -> bool:
+        """Отключает LightGBM модель для использования KNN"""
+        try:
+            if hasattr(self, 'lgb_adapter') and self.lgb_adapter:
+                self.lgb_adapter.model_loaded = False
+                logger.info("LightGBM модель отключена, используется KNN")
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Ошибка отключения LightGBM модели: {e}")
+            return False
+
+    async def classify_batch(self, texts: List[str]) -> List[Tuple[str, float]]:
+        """Пакетная классификация текстов"""
+        try:
+            if not self.examples:
+                return [("Нет обучающих примеров", 0.0)] * len(texts)
+                
+            results = []
+            for text in texts:
+                category, confidence = await self.classify(text)
+                results.append((category, confidence))
+                
+            return results
             
         except Exception as e:
-            logger.error(f"Ошибка ML классификации: {e}")
-            # Fallback на базовую классификацию
-            return self._basic_classify(processed_text)
-    
-    def _preprocess_text(self, text: str) -> str:
-        """Предобработка текста"""
-        # Удаляем лишние пробелы и переводы строк
-        text = re.sub(r'\s+', ' ', text.strip())
-        
-        # Удаляем специальные символы (оставляем русские и английские буквы, цифры)
-        text = re.sub(r'[^\w\s\-.,!?]', ' ', text)
-        
-        return text.lower()
-    
-    def _basic_classify(self, text: str) -> Tuple[str, float]:
-        """Базовая классификация по ключевым словам"""
-        keywords = {
-            "Проблемы с доступом": [
-                "пароль", "войти", "доступ", "авторизация", "логин", 
-                "заблокирован", "не могу войти"
-            ],
-            "Ошибки в работе системы": [
-                "ошибка", "не работает", "сломалось", "баг", "глюк",
-                "500", "404", "ошибка сервера", "не отвечает"
-            ],
-            "Техническая поддержка": [
-                "помощь", "поддержка", "как сделать", "инструкция",
-                "настройка", "установка"
-            ],
-            "Консультация": [
-                "как", "подскажите", "вопрос", "разъясните", "консультация"
-            ],
-            "Запрос на изменение": [
-                "изменить", "поменять", "настроить", "добавить права",
-                "удалить", "обновить"
-            ],
-            "Жалоба": [
-                "жалоба", "недоволен", "плохо работает", "некачественно",
-                "медленно", "не устраивает"
-            ],
-            "Предложение": [
-                "предлагаю", "идея", "улучшение", "функция", "добавить"
-            ]
-        }
-        
-        text_lower = text.lower()
-        scores = {}
-        
-        for category, words in keywords.items():
-            score = 0
-            for word in words:
-                if word in text_lower:
-                    score += 1
-            
-            if score > 0:
-                scores[category] = score / len(words)
-        
-        if scores:
-            best_category = max(scores.items(), key=lambda x: x[1])
-            return best_category[0], min(best_category[1] * 0.7, 0.9)  # Максимум 0.9 для базовой
-        
-        return "Другое", 0.3
-    
-    async def add_training_example(self, text: str, category: str) -> bool:
-        """Добавление примера для обучения"""
-        try:
-            # Сохраняем в файл для будущего переобучения
-            training_file = self.model_path.parent / "training_data.json"
-            
-            # Загружаем существующие данные
-            training_data = []
-            if training_file.exists():
-                with open(training_file, 'r', encoding='utf-8') as f:
-                    training_data = json.load(f)
-            
-            # Добавляем новый пример
-            training_data.append({
-                'text': text,
-                'category': category,
-                'timestamp': datetime.now().isoformat(),
-                'user_added': True
-            })
-            
-            # Сохраняем
-            with open(training_file, 'w', encoding='utf-8') as f:
-                json.dump(training_data, f, ensure_ascii=False, indent=2)
-            
-            logger.info(f"Добавлен пример обучения: '{category}'")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка добавления примера: {e}")
-            return False
-    
-    async def retrain_model(self) -> bool:
-        """Переобучение модели на новых данных"""
-        if not joblib:
-            logger.warning("scikit-learn не установлен")
-            return False
-            
-        try:
-            training_file = self.model_path.parent / "training_data.json"
-            if not training_file.exists():
-                logger.warning("Нет данных для переобучения")
-                return False
-            
-            with open(training_file, 'r', encoding='utf-8') as f:
-                training_data = json.load(f)
-            
-            if len(training_data) < 5:
-                logger.warning("Недостаточно данных для переобучения")
-                return False
-            
-            texts = [item['text'] for item in training_data]
-            labels = [item['category'] for item in training_data]
-            
-            # Обучаем новую модель
-            new_model = Pipeline([
-                ('tfidf', TfidfVectorizer(
-                    max_features=1000,
-                    ngram_range=(1, 2)
-                )),
-                ('classifier', LogisticRegression(random_state=42))
-            ])
-            
-            loop = asyncio.get_event_loop()
-            await loop.run_in_executor(None, new_model.fit, texts, labels)
-            
-            # Заменяем модель
-            self.model = new_model
-            self.categories = list(set(labels))
-            self.is_trained = True
-            
-            # Сохраняем
+            logger.error(f"Ошибка пакетной классификации: {e}")
+            return [("Ошибка", 0.0)] * len(texts)
+
+    async def maybe_auto_save(self):
+        """Автоматическое сохранение если прошло достаточно времени"""
+        now = datetime.now()
+        if now - self.last_save > self.save_interval:
             await self.save_model()
+            await self.backup_model()
+            self.last_save = now
+
+    async def backup_model(self) -> bool:
+        """Создает резервную копию модели и данных"""
+        try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_path = self.backup_dir / f"backup_{timestamp}"
+            backup_path.mkdir(exist_ok=True)
+
+            # Копируем файлы модели
+            shutil.copy2(Path(MODEL_PATH) / "classifier.pkl", backup_path / "classifier.pkl")
+            shutil.copy2(Path(MODEL_PATH) / "examples.pkl", backup_path / "examples.pkl")
             
-            logger.info(f"Модель переобучена на {len(training_data)} примерах")
+            # Удаляем старые бэкапы (оставляем последние 5)
+            backups = sorted(self.backup_dir.glob("backup_*"))
+            if len(backups) > 5:
+                for old_backup in backups[:-5]:
+                    shutil.rmtree(old_backup)
+                    
             return True
-            
         except Exception as e:
-            logger.error(f"Ошибка переобучения: {e}")
+            logger.error(f"Ошибка создания бэкапа: {e}")
             return False
-    
-    def get_categories(self) -> List[str]:
-        """Получить список доступных категорий"""
-        return self.categories if self.categories else self.default_categories
-    
-    def get_stats(self) -> Dict[str, Any]:
-        """Статистика классификатора"""
-        return {
-            'is_trained': self.is_trained,
-            'categories_count': len(self.categories),
-            'categories': self.categories,
-            'model_exists': self.model is not None,
-            'confidence_threshold': self.confidence_threshold,
-            'ml_available': joblib is not None
-        }
+
+    def load_latest_backup(self) -> bool:
+        """Загружает последний бэкап если основные файлы повреждены"""
+        try:
+            backups = sorted(self.backup_dir.glob("backup_*"))
+            if not backups:
+                return False
+
+            latest_backup = backups[-1]
+            shutil.copy2(latest_backup / "classifier.pkl", Path(MODEL_PATH) / "classifier.pkl")
+            shutil.copy2(latest_backup / "examples.pkl", Path(MODEL_PATH) / "examples.pkl")
+            return True
+        except Exception as e:
+            logger.error(f"Ошибка загрузки бэкапа: {e}")
+            return False

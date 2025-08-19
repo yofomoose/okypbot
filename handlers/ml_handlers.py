@@ -10,7 +10,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 
 from services.ml_service import ml_service
-from database.models import get_user, update_user
+from database.models import db
 from keyboards.main import get_back_to_menu_keyboard
 
 logger = logging.getLogger(__name__)

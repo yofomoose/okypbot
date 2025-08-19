@@ -53,3 +53,35 @@ Thumbs.db
 # Временные файлы
 *.tmp
 *.temp
+
+# База данных SQLite
+*.db
+*.sqlite
+*.sqlite3
+
+# ML модели и данные
+ml/models/*.pkl
+ml/models/*.txt
+ml/models/backups/
+ml/models/training_examples.pkl
+
+# Документы статуса разработки
+*_SUCCESS.md
+*_COMPLETE.md
+PROJECT_STATUS.md
+FIXES.md
+
+# Тестовые файлы
+test_*.py
+debug_*.py
+diagnose_*.py
+analyze_*.py
+quick_test.py
+
+# Логи тестов
+test_*.log
+test_*.txt
+
+# JSON файлы с данными пользователей
+database/users.json
+database/user_issues.json

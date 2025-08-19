@@ -7,12 +7,16 @@ def get_main_menu() -> InlineKeyboardMarkup:
     """Главное меню бота"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
-            InlineKeyboardButton(text="📋 Мои заявки", callback_data="issues"),
-            InlineKeyboardButton(text="➕ Создать заявку", callback_data="create_issue")
+            InlineKeyboardButton(text="🎫 Создать заявку", callback_data="create_issue"),
+            InlineKeyboardButton(text="📋 Мои заявки", callback_data="my_issues")
         ],
         [
-            InlineKeyboardButton(text="🤖 Классификатор", callback_data="ml_classify"),
-            InlineKeyboardButton(text="👤 Профиль", callback_data="profile")
+            InlineKeyboardButton(text="⚡ Быстрая заявка", callback_data="quick_issue_info"),
+            InlineKeyboardButton(text="🤖 ML Классификатор", callback_data="ml_classify")
+        ],
+        [
+            InlineKeyboardButton(text="👤 Профиль", callback_data="profile"),
+            InlineKeyboardButton(text="📊 Статистика", callback_data="stats")
         ]
     ])
     return keyboard
