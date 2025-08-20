@@ -1,0 +1,23 @@
+# Основные зависимости
+aiogram==3.4.1
+aiohttp==3.9.3
+asyncpg==0.29.0
+python-dotenv==1.0.1
+
+# Для ML
+numpy==1.26.4
+scikit-learn==1.4.1.post1
+sentence-transformers==2.5.1
+lightgbm==4.3.0
+
+# Для webhook сервера
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+
+# Для баз данных
+psycopg2-binary==2.9.9
+
+# Утилиты
+requests==2.31.0
+Pillow==10.2.0
+pathlib2==2.3.7

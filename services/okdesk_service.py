@@ -441,6 +441,78 @@ class IssueService:
         
         return comment
 
+    async def add_comment_to_issue(self, issue_id: int, comment_text: str, is_public: bool = True, author_type: str = "employee") -> bool:
+        """Добавляет комментарий к заявке
+        
+        Args:
+            issue_id: ID заявки
+            comment_text: Текст комментария
+            is_public: Публичный комментарий или внутренний
+            author_type: Тип автора (employee, contact)
+            
+        Returns:
+            True если комментарий добавлен успешно
+        """
+        try:
+            url = f"{self.base_url}/api/v1/issues/{issue_id}/comments"
+            
+            # Данные комментария
+            comment_data = {
+                'content': comment_text,
+                'public': is_public,
+                'author_type': author_type
+            }
+            
+            params = {'api_token': self.api_key}
+            headers = {'Content-Type': 'application/json'}
+            
+            async with self.session.post(url, json=comment_data, params=params, headers=headers) as response:
+                if response.status in [200, 201]:
+                    logger.info(f"Комментарий добавлен к заявке {issue_id}")
+                    return True
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Ошибка добавления комментария: {response.status} - {error_text}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Ошибка при добавлении комментария: {e}")
+            return False
+
+    async def update_issue_status(self, issue_id: int, status: str) -> bool:
+        """Обновляет статус заявки
+        
+        Args:
+            issue_id: ID заявки
+            status: Новый статус (new, in_progress, waiting, resolved, closed)
+            
+        Returns:
+            True если статус обновлен успешно
+        """
+        try:
+            url = f"{self.base_url}/api/v1/issues/{issue_id}"
+            
+            # Данные для обновления
+            update_data = {
+                'status': status
+            }
+            
+            params = {'api_token': self.api_key}
+            headers = {'Content-Type': 'application/json'}
+            
+            async with self.session.patch(url, json=update_data, params=params, headers=headers) as response:
+                if response.status in [200, 201]:
+                    logger.info(f"Статус заявки {issue_id} обновлен на {status}")
+                    return True
+                else:
+                    error_text = await response.text()
+                    logger.error(f"Ошибка обновления статуса: {response.status} - {error_text}")
+                    return False
+                    
+        except Exception as e:
+            logger.error(f"Ошибка при обновлении статуса: {e}")
+            return False
+
 # Глобальные экземпляры для использования в боте
 okdesk_service = None
 issue_service = None

@@ -9,6 +9,7 @@ load_dotenv()
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 OKDESK_API_TOKEN = os.getenv("OKDESK_API_TOKEN")
 OKDESK_BASE_URL = os.getenv("OKDESK_BASE_URL")
+OKDESK_WEBHOOK_SECRET = os.getenv("OKDESK_WEBHOOK_SECRET", "")  # Секрет для проверки webhook подписи
 
 # Админы для ML обратной связи
 ADMIN_IDS = []

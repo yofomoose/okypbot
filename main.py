@@ -7,12 +7,13 @@ import asyncio
 import logging
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
-from config import BOT_TOKEN
+from config import BOT_TOKEN, WEBHOOK_ENABLED, WEBHOOK_HOST, WEBHOOK_PORT
 from handlers.main import router as main_router
 from handlers.registration import router as registration_router
 from handlers.ml_handlers import router as ml_router
 from handlers.feedback_handlers import router as feedback_router
 from handlers.admin_stats import router as admin_router
+from handlers.webhook_handlers import webhook_router
 from services.issue_monitor import IssueStatusMonitor, set_monitor
 
 # Настройка логирования
@@ -21,6 +22,24 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+async def run_webhook_server():
+    """Запуск webhook сервера"""
+    try:
+        import uvicorn
+        from services.webhook_server import app as webhook_app
+        
+        config = uvicorn.Config(
+            webhook_app, 
+            host=WEBHOOK_HOST, 
+            port=WEBHOOK_PORT,
+            log_level="info"
+        )
+        server = uvicorn.Server(config)
+        await server.serve()
+    except ImportError:
+        logger.error("FastAPI/uvicorn не установлены. Установите: pip install fastapi uvicorn")
+        raise
 
 async def main():
     """Главная функция запуска бота"""
@@ -127,26 +146,52 @@ async def main():
     
     dp.include_router(admin_router)  # Админ функции
     dp.include_router(ml_router)  # ML функции
+    dp.include_router(webhook_router)  # Webhook функции
     dp.include_router(main_router)  # Потом основные функции
     
     logger.info("Бот запущен")
     
     try:
-        # Запуск мониторинга в фоновом режиме
+        # Создаем задачи
         tasks = []
         
-        # Мониторинг статусов заявок
-        monitor_task = asyncio.create_task(monitor.start_monitoring())
-        tasks.append(monitor_task)
+        # Основной polling бота
+        bot_task = asyncio.create_task(dp.start_polling(bot))
+        tasks.append(bot_task)
         
-        # Мониторинг комментариев (если инициализирован)
-        if comment_monitor:
-            comment_monitor_task = asyncio.create_task(comment_monitor.start_monitoring())
-            tasks.append(comment_monitor_task)
-            logger.info("Запущен мониторинг комментариев")
+        # Webhook сервер (если включен)
+        if WEBHOOK_ENABLED:
+            try:
+                webhook_task = asyncio.create_task(run_webhook_server())
+                tasks.append(webhook_task)
+                logger.info(f"Webhook сервер запущен на {WEBHOOK_HOST}:{WEBHOOK_PORT}")
+            except Exception as e:
+                logger.error(f"Ошибка запуска webhook сервера: {e}")
+                logger.info("Продолжаем без webhook сервера")
         
-        # Запуск polling
-        await dp.start_polling(bot)
+        if not WEBHOOK_ENABLED:
+            # Fallback: старый мониторинг (если webhook отключен)
+            monitor_task = asyncio.create_task(monitor.start_monitoring())
+            tasks.append(monitor_task)
+            logger.info("Используется polling мониторинг (webhook отключен)")
+            
+            # Мониторинг комментариев (если инициализирован)
+            if comment_monitor:
+                comment_monitor_task = asyncio.create_task(comment_monitor.start_monitoring())
+                tasks.append(comment_monitor_task)
+                logger.info("Запущен мониторинг комментариев")
+        
+        # Ждем завершения любой из задач
+        done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        
+        # Отменяем оставшиеся задачи
+        for task in pending:
+            task.cancel()
+            try:
+                await task
+            except asyncio.CancelledError:
+                pass
+                
     except Exception as e:
         logger.error(f"Ошибка при работе бота: {e}")
     finally:
@@ -157,6 +202,8 @@ async def main():
                 await task
             except asyncio.CancelledError:
                 pass
+        
+        await bot.session.close()
         
         await bot.session.close()
 

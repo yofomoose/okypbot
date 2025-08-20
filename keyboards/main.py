@@ -119,3 +119,59 @@ def get_yes_no_keyboard(action: str, item_id: int = None) -> InlineKeyboardMarku
         ]
     ])
     return keyboard
+
+def get_issue_reply_keyboard(issue_id: int) -> InlineKeyboardMarkup:
+    """Клавиатура для ответа клиента на заявку"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="💬 Ответить", 
+                callback_data=f"client_reply_{issue_id}"
+            ),
+            InlineKeyboardButton(
+                text="📋 Детали заявки", 
+                callback_data=f"issue_details_{issue_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="✅ Закрыть заявку", 
+                callback_data=f"close_issue_{issue_id}"
+            ),
+            InlineKeyboardButton(
+                text="🔙 Главное меню", 
+                callback_data="menu"
+            )
+        ]
+    ])
+
+def get_client_issue_menu(issue_id: int) -> InlineKeyboardMarkup:
+    """Меню действий с заявкой для клиента"""
+    return InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(
+                text="💬 Добавить комментарий", 
+                callback_data=f"add_comment_{issue_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="📋 Подробности", 
+                callback_data=f"issue_details_{issue_id}"
+            ),
+            InlineKeyboardButton(
+                text="📊 История", 
+                callback_data=f"issue_history_{issue_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="⭐ Оценить", 
+                callback_data=f"rate_issue_{issue_id}"
+            ),
+            InlineKeyboardButton(
+                text="🔙 Назад", 
+                callback_data="my_issues"
+            )
+        ]
+    ])

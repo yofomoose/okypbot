@@ -85,3 +85,6 @@ test_*.txt
 # JSON файлы с данными пользователей
 database/users.json
 database/user_issues.json
+
+# Скрипты настройки (могут содержать чувствительные данные)
+scripts/setup_local.py
