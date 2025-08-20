@@ -1,0 +1,54 @@
+{
+  "version": "1.0.0",
+  "created_date": "2025-08-20T21:30:00Z",
+  "updated_date": "2025-08-20T21:30:00Z",
+  "model_type": "RandomForestClassifier",
+  "vectorizer_type": "TfidfVectorizer",
+  "training_data": {
+    "samples_count": 1000,
+    "features_count": 5000,
+    "categories_count": 8
+  },
+  "performance": {
+    "accuracy": 0.87,
+    "precision": 0.85,
+    "recall": 0.84,
+    "f1_score": 0.84
+  },
+  "categories": [
+    "Техника и оборудование",
+    "Программное обеспечение", 
+    "Сетевые проблемы",
+    "Учетные записи и доступы",
+    "Принтеры и печать",
+    "Электронная почта",
+    "Мобильные устройства",
+    "Прочее"
+  ],
+  "preprocessing": {
+    "text_cleaning": true,
+    "lemmatization": true,
+    "stop_words_removal": true,
+    "min_df": 2,
+    "max_df": 0.95,
+    "ngram_range": [1, 2]
+  },
+  "model_parameters": {
+    "n_estimators": 100,
+    "max_depth": 10,
+    "min_samples_split": 5,
+    "min_samples_leaf": 2,
+    "random_state": 42
+  },
+  "deployment": {
+    "confidence_threshold": 0.7,
+    "fallback_category": "Прочее",
+    "enable_logging": true
+  },
+  "files": {
+    "classifier": "issue_classifier.pkl",
+    "vectorizer": "vectorizer.pkl",
+    "label_encoder": "label_encoder.pkl"
+  },
+  "description": "ML модель для автоматической классификации заявок в OkypBot по категориям проблем"
+}

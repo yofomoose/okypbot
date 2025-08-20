@@ -21,6 +21,76 @@ Telegram бот для автоматизации работы с системо
 - **Привязка к компаниям**: Автоматическая привязка сотрудников к компаниям
 - **Просмотр заявок**: Просмотр списка заявок пользователя
 
+## 🚀 Развертывание
+
+### Продакшн развертывание (рекомендуется)
+
+#### Вариант 1: Со встроенным nginx (по умолчанию)
+```bash
+# Полное развертывание (БД + бот + nginx)
+make deploy
+
+# Или вручную
+chmod +x deploy-full.sh
+./deploy-full.sh
+```
+
+#### Вариант 2: С внешним nginx
+```bash
+# Развертывание без nginx (только БД + бот)
+make deploy-external
+
+# Или вручную
+docker-compose -f docker-compose.external-nginx.yml up --build -d
+```
+
+При использовании внешнего nginx добавьте конфигурацию:
+```bash
+# Скопируйте конфигурацию
+sudo cp nginx/external-integration.conf /etc/nginx/sites-available/okypbot
+sudo ln -s /etc/nginx/sites-available/okypbot /etc/nginx/sites-enabled/
+
+# Перезагрузите nginx
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+#### Доступные команды
+```bash
+make help              # Показать все команды
+make deploy            # Полное развертывание (с nginx)
+make deploy-external   # Развертывание без nginx
+make update-bot        # Обновить только бота
+make start             # Запустить сервисы
+make start-external    # Запустить без nginx
+make stop              # Остановить сервисы
+make logs              # Просмотр логов
+make logs-nginx        # Логи nginx
+make status            # Статус сервисов
+make backup-db         # Бэкап базы данных
+```
+
+### Локальная разработка
+1. Клонируйте репозиторий
+2. Установите зависимости: `pip install -r requirements.txt`
+3. Настройте `.env` файл
+4. Запустите: `python main.py`
+
+### Docker разработка
+```bash
+docker-compose up --build -d
+```
+
+## 📋 Полная инструкция по развертыванию
+
+**👉 [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) - Подробная инструкция по продакшн развертыванию**
+
+Включает:
+- 🗄️ **Автоматическое создание таблиц БД** - полная структура создается автоматически
+- 🤖 **Настройка ML модели** - инструкции по размещению и проверке модели
+- 🐳 **Docker развертывание** - два варианта с nginx и без
+- 🔧 **Команды управления** - все необходимые make команды
+- 🔍 **Мониторинг и отладка** - логи, health checks, решение проблем
+
 ## Установка
 
 1. Клонируйте репозиторий:
