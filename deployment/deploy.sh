@@ -4,6 +4,24 @@
 
 echo "🚀 Развертывание OkypBot (интеграция с n8n)..."
 
+# Функция для определения команды docker compose
+get_docker_compose_cmd() {
+    if command -v docker-compose &> /dev/null; then
+        echo "docker-compose"
+    elif docker compose version &> /dev/null; then
+        echo "docker compose"
+    else
+        echo "❌ Docker Compose не найден!"
+        echo "Установите Docker Compose:"
+        echo "  Ubuntu/Debian: apt-get install docker-compose-plugin"
+        echo "  CentOS/RHEL: yum install docker-compose-plugin"
+        exit 1
+    fi
+}
+
+DOCKER_COMPOSE=$(get_docker_compose_cmd)
+echo "📦 Используется: $DOCKER_COMPOSE"
+
 # Проверка Docker
 if ! command -v docker &> /dev/null; then
     echo "❌ Docker не установлен"
@@ -29,19 +47,19 @@ fi
 
 # Остановка предыдущих контейнеров
 echo "🛑 Остановка предыдущих контейнеров..."
-docker-compose down
+$DOCKER_COMPOSE down
 
 # Сборка и запуск
 echo "🔨 Сборка контейнеров..."
-docker-compose build
+$DOCKER_COMPOSE build
 
 echo "🚀 Запуск сервисов..."
-docker-compose up -d
+$DOCKER_COMPOSE up -d
 
 # Проверка статуса
 echo "📊 Проверка статуса сервисов..."
 sleep 10
-docker-compose ps
+$DOCKER_COMPOSE ps
 
 # Получение IP контейнера для nginx
 BOT_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' $(docker-compose ps -q bot))

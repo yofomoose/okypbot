@@ -235,16 +235,28 @@ bot_model/
 ```
 okypbot/
 ├── main.py                     # Точка входа приложения
-├── config.py                   # Конфигурация и переменные окружения
 ├── requirements.txt            # Зависимости Python
-├── test_webhook.py            # Тестирование webhook интеграции
 ├── .env.example               # Пример файла с переменными окружения
 ├── .gitignore                 # Игнорируемые файлы
 ├── README.md                  # Документация
-├── CLEANUP_STATUS.md          # Статус очистки ML кода
+├── Makefile                   # Команды управления проектом
+├── LICENSE                    # Лицензия
+├── UPGRADE_GUIDE.md           # Инструкция по обновлению
+├── DOCKER_COMPOSE_FIX.md      # Исправления Docker Compose
 ├── docs/                      # Дополнительная документация
 │   ├── webhook_integration.md # Документация по webhook интеграции
 │   └── bot_model_integration.md # Документация ML интеграции
+├── docker/                    # Docker конфигурации
+│   ├── docker-compose.prod.yml # Продакшн развертывание
+│   ├── docker-compose.external-nginx.yml # Внешний nginx
+│   └── Dockerfile             # Образ приложения
+├── deployment/                # Скрипты развертывания
+│   ├── deploy-full.sh         # Полное развертывание
+│   ├── deploy.sh              # Обычное развертывание
+│   ├── update-bot.sh          # Обновление бота
+│   └── check-ml-model.sh      # Проверка ML модели
+├── tests/                     # Тестовые файлы
+│   └── test_webhook.py        # Тестирование webhook интеграции
 ├── bot_model/                 # Загруженная ML модель
 │   ├── classifier.pkl         # KNeighborsClassifier модель
 │   ├── label_encoder.pkl      # Кодировщик категорий
@@ -254,7 +266,8 @@ okypbot/
 │   ├── main.py               # Основные обработчики
 │   ├── registration.py       # Обработчики регистрации
 │   ├── admin_handlers.py     # Админские команды
-│   └── bot_model_handlers.py # ML команды для админов
+│   ├── bot_model_handlers.py # ML команды для админов
+│   └── webhook_handlers.py   # Webhook обработчики
 ├── keyboards/                 # Inline клавиатуры
 │   ├── __init__.py
 │   ├── main.py              # Основные клавиатуры (с ролевым доступом)
@@ -267,6 +280,33 @@ okypbot/
 │   ├── bot_model_adapter.py  # Адаптер для bot_model
 │   ├── text_vectorizer.py    # Векторизация текста
 │   └── trained/              # Обученные модели
+├── services/                 # Бизнес-логика и сервисы
+│   ├── admin_service.py      # Админские функции
+│   ├── ml_service.py         # ML сервисы
+│   ├── okdesk_service.py     # Интеграция с Okdesk
+│   └── webhook_server.py     # Webhook сервер
+├── database/                 # Работа с базой данных
+│   ├── __init__.py
+│   └── models.py             # Модели данных
+├── config/                   # Конфигурация
+│   ├── __init__.py
+│   └── db_config.py          # Конфигурация БД
+├── api/                      # API клиенты
+│   ├── __init__.py
+│   └── okdesk_api.py         # Okdesk API клиент
+├── sql/                      # SQL скрипты
+│   ├── create_database.sql   # Создание БД
+│   └── create_tables.sql     # Создание таблиц
+├── nginx/                    # Nginx конфигурации
+│   ├── default.conf          # Основная конфигурация
+│   └── external-integration.conf # Для внешнего nginx
+├── states/                   # FSM состояния
+│   ├── __init__.py
+│   └── registration.py       # Состояния регистрации
+├── scripts/                  # Вспомогательные скрипты
+│   └── setup_webhook.py      # Настройка webhook
+└── utils/                    # Утилиты
+    └── ...                   # Вспомогательные функции
 ├── services/                 # Сервисы и интеграции
 │   ├── __init__.py
 │   └── webhook_server.py    # Webhook сервер для Okdesk

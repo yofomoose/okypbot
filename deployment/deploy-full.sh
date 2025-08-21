@@ -4,6 +4,25 @@
 
 echo "🚀 Полное развертывание OkypBot..."
 
+# Функция для определения команды docker compose
+get_docker_compose_cmd() {
+    if command -v docker-compose &> /dev/null; then
+        echo "docker-compose"
+    elif docker compose version &> /dev/null; then
+        echo "docker compose"
+    else
+        echo "❌ Docker Compose не найден!"
+        echo "Установите Docker Compose:"
+        echo "  Ubuntu/Debian: apt-get install docker-compose-plugin"
+        echo "  CentOS/RHEL: yum install docker-compose-plugin"
+        echo "  Или установите standalone: https://docs.docker.com/compose/install/"
+        exit 1
+    fi
+}
+
+DOCKER_COMPOSE=$(get_docker_compose_cmd)
+echo "📦 Используется: $DOCKER_COMPOSE"
+
 # Проверка .env
 if [ ! -f .env ]; then
     echo "📝 Создайте .env файл"
@@ -12,15 +31,15 @@ if [ ! -f .env ]; then
 fi
 
 # Остановка всех сервисов
-docker-compose -f docker-compose.prod.yml down
+$DOCKER_COMPOSE -f docker/docker-compose.prod.yml down
 
 # Сборка образов
 echo "🔨 Сборка образов..."
-docker-compose -f docker-compose.prod.yml build
+$DOCKER_COMPOSE -f docker/docker-compose.prod.yml build
 
 # Запуск всех сервисов
 echo "🚀 Запуск сервисов..."
-docker-compose -f docker-compose.prod.yml up -d
+$DOCKER_COMPOSE -f docker/docker-compose.prod.yml up -d
 
 # Ожидание готовности
 echo "⏳ Ожидание готовности сервисов..."
@@ -28,7 +47,14 @@ sleep 30
 
 # Проверка статуса
 echo "📊 Статус сервисов:"
-docker-compose -f docker-compose.prod.yml ps
+$DOCKER_COMPOSE -f docker/docker-compose.prod.yml ps
+
+# Проверка логов
+echo "📝 Последние логи:"
+$DOCKER_COMPOSE -f docker/docker-compose.prod.yml logs --tail=10
+
+echo "✅ Развертывание завершено!"
+echo "🔗 Проверьте webhook endpoint: http://your-domain/webhook/"
 
 # Проверка здоровья
 echo "🔍 Проверка health check..."

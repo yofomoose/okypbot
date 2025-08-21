@@ -1,11 +1,14 @@
 # Makefile для управления OkypBot
 
 # Переменные
-COMPOSE_FILE = docker-compose.prod.yml
-COMPOSE_FILE_EXTERNAL = docker-compose.external-nginx.yml
+COMPOSE_FILE = docker/docker-compose.prod.yml
+COMPOSE_FILE_EXTERNAL = docker/docker-compose.external-nginx.yml
 CONTAINER_BOT = okypbot_app
 CONTAINER_DB = okypbot_postgres
 CONTAINER_NGINX = okypbot_nginx
+
+# Определение команды Docker Compose
+DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; elif docker compose version >/dev/null 2>&1; then echo "docker compose"; else echo "echo 'Error: Docker Compose not found' && exit 1"; fi)
 
 # Помощь
 help:
@@ -28,49 +31,51 @@ help:
 	@echo "  backup-db     - Бэкап базы данных"
 	@echo "  check-ml      - Проверка ML модели"
 	@echo "  clean         - Очистка неиспользуемых образов"
+	@echo ""
+	@echo "🔧 Используется: $(DOCKER_COMPOSE)"
 
 # Развертывание
 deploy:
-	chmod +x deploy-full.sh
-	./deploy-full.sh
+	chmod +x deployment/deploy-full.sh
+	./deployment/deploy-full.sh
 
 deploy-external:
-	docker-compose -f $(COMPOSE_FILE_EXTERNAL) up --build -d
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE_EXTERNAL) up --build -d
 
 # Обновление бота
 update-bot:
-	chmod +x update-bot.sh
-	./update-bot.sh
+	chmod +x deployment/update-bot.sh
+	./deployment/update-bot.sh
 
 # Управление сервисами
 start:
-	docker-compose -f $(COMPOSE_FILE) up -d
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d
 
 start-external:
-	docker-compose -f $(COMPOSE_FILE_EXTERNAL) up -d
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE_EXTERNAL) up -d
 
 stop:
-	docker-compose -f $(COMPOSE_FILE) stop
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) stop
 
 restart:
-	docker-compose -f $(COMPOSE_FILE) restart
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) restart
 
 # Логи
 logs:
-	docker-compose -f $(COMPOSE_FILE) logs -f
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f
 
 logs-bot:
-	docker-compose -f $(COMPOSE_FILE) logs -f bot
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f bot
 
 logs-db:
-	docker-compose -f $(COMPOSE_FILE) logs -f postgres
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f postgres
 
 logs-nginx:
-	docker-compose -f $(COMPOSE_FILE) logs -f nginx
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f nginx
 
 # Статус
 status:
-	docker-compose -f $(COMPOSE_FILE) ps
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) ps
 
 # Подключение к контейнерам
 shell-bot:
@@ -86,8 +91,8 @@ backup-db:
 
 # Проверка ML модели
 check-ml:
-	chmod +x check-ml-model.sh
-	./check-ml-model.sh
+	chmod +x deployment/check-ml-model.sh
+	./deployment/check-ml-model.sh
 
 # Очистка
 clean:
