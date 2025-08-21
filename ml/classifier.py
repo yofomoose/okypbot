@@ -70,8 +70,6 @@ except ImportError as e:
     logger.warning(f"Модель bot_model недоступна: {e}")
     BOT_MODEL_AVAILABLE = False
 
-logger = logging.getLogger(__name__)
-
 # Импорты для старых компонентов (только если bot_model недоступна)  
 try:
     from ml.embeddings import EmbeddingManager
@@ -89,38 +87,166 @@ except ImportError as e:
 
 class TextClassifier:
     def __init__(self):
+        """Инициализация TextClassifier с защитой от ошибок разрешений"""
+        
         # Кеш для результатов классификации
         self.classification_cache = {}
-        self.cache_max_size = 1000  # Максимальный размер кеша
+        self.cache_max_size = 1000
         
         # Счетчик пользовательских исправлений
         self._user_corrections = 0
-        self._correction_threshold = 1  # Порог для отключения LightGBM
+        self._correction_threshold = 1
         self.lgb_disabled_by_corrections = False
-        self.use_lightgbm = True  # Флаг использования LightGBM
+        self.use_lightgbm = True
         
         # Приоритет: bot_model > LightGBM > старая KNN
         self.bot_model_adapter = None
-        self.use_bot_model = True  # Приоритет bot_model
+        self.use_bot_model = True
         self.lgb_adapter = None
         
-        # Fallback компоненты (только если bot_model недоступна)
+        # Fallback компоненты
         self.embedder = EmbeddingManager() if EMBEDDINGS_AVAILABLE else None
         self.classifier = KNeighborsClassifier(n_neighbors=5)
         self.examples = []
         self.label_encoder = LabelEncoder()
         
-        # Инициализация моделей
-        self._initialize_bot_model()
-        if not (self.bot_model_adapter and self.bot_model_adapter.is_available()):
-            self._initialize_advanced_model()
-            self.load_examples()
+        # КРИТИЧЕСКИ ВАЖНО: Создаем директории ПЕРВЫМ ДЕЛОМ
+        self._ensure_ml_directories()
+        
+        # Инициализация моделей (только после создания директорий)
+        try:
+            self._initialize_bot_model()
+            if not (self.bot_model_adapter and self.bot_model_adapter.is_available()):
+                self._initialize_advanced_model()
+                self.load_examples()
+        except Exception as e:
+            logger.warning(f"Ошибка инициализации моделей: {e}")
         
         # Настройки сохранения
         self.last_save = datetime.now()
         self.save_interval = timedelta(minutes=5)
-        self.backup_dir = Path(MODEL_PATH) / "backups"
-        self.backup_dir.mkdir(parents=True, exist_ok=True)
+        
+        # Безопасная инициализация backup_dir (ТОЛЬКО после создания директорий)
+        self._setup_backup_directory()
+
+    def _ensure_ml_directories(self):
+        """Создает все необходимые ML директории с максимальной совместимостью"""
+        logger.info("🔧 Создание ML директорий...")
+        
+        # Список критически важных директорий
+        critical_dirs = [
+            'ml',
+            'ml/models',
+            'ml/models/backups',
+            'ml/models/cache',
+            'ml/trained',
+            'models',
+            'models/backups',
+            'data',
+            'logs'
+        ]
+        
+        created_count = 0
+        
+        for dir_name in critical_dirs:
+            success = False
+            
+            # Метод 1: через pathlib.Path
+            try:
+                Path(dir_name).mkdir(parents=True, exist_ok=True)
+                logger.debug(f"✅ Создана директория (pathlib): {dir_name}")
+                success = True
+                created_count += 1
+            except PermissionError:
+                logger.warning(f"⚠️ Нет прав через pathlib для {dir_name}")
+            except Exception as e:
+                logger.debug(f"Ошибка pathlib для {dir_name}: {e}")
+            
+            # Метод 2: через os.makedirs (fallback)
+            if not success:
+                try:
+                    os.makedirs(dir_name, exist_ok=True)
+                    logger.debug(f"✅ Создана директория (os.makedirs): {dir_name}")
+                    success = True
+                    created_count += 1
+                except PermissionError:
+                    logger.warning(f"⚠️ Нет прав через os.makedirs для {dir_name}")
+                except Exception as e:
+                    logger.debug(f"Ошибка os.makedirs для {dir_name}: {e}")
+            
+            # Метод 3: проверка существования
+            if not success:
+                if os.path.exists(dir_name):
+                    logger.debug(f"📁 Директория уже существует: {dir_name}")
+                    created_count += 1
+                else:
+                    logger.error(f"❌ Не удалось создать критически важную директорию: {dir_name}")
+        
+        logger.info(f"🔧 Обработано {created_count}/{len(critical_dirs)} директорий")
+        
+        # Тестируем права записи в критических директориях
+        self._test_write_permissions()
+
+    def _test_write_permissions(self):
+        """Тестирует права записи в критических директориях"""
+        test_dirs = ['ml/models', 'ml/trained', 'models']
+        
+        for test_dir in test_dirs:
+            if os.path.exists(test_dir):
+                test_file = os.path.join(test_dir, '.write_test')
+                try:
+                    with open(test_file, 'w') as f:
+                        f.write('test')
+                    os.remove(test_file)
+                    logger.debug(f"✅ Права записи работают в {test_dir}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Проблема с правами записи в {test_dir}: {e}")
+
+    def _setup_backup_directory(self):
+        """Максимально надежная настройка директории для бэкапов"""
+        logger.info("🔧 Настройка backup директории...")
+        
+        # Список попыток в порядке приоритета
+        backup_attempts = [
+            Path(MODEL_PATH) / "backups",  # Стандартный путь
+            Path("ml/models/backups"),     # Альтернативный путь
+            Path("backups"),               # Локальная директория
+            Path("tmp/backups"),           # Временная директория
+        ]
+        
+        # Пытаемся создать backup директорию
+        for attempt_path in backup_attempts:
+            try:
+                attempt_path.mkdir(parents=True, exist_ok=True)
+                
+                # Тестируем запись
+                test_file = attempt_path / ".test_write"
+                test_file.write_text("test")
+                test_file.unlink()
+                
+                self.backup_dir = attempt_path
+                logger.info(f"✅ Backup директория создана: {self.backup_dir}")
+                return
+                
+            except PermissionError:
+                logger.debug(f"Нет прав для {attempt_path}")
+                continue
+            except Exception as e:
+                logger.debug(f"Ошибка с {attempt_path}: {e}")
+                continue
+        
+        # Последний fallback - системная временная директория
+        try:
+            import tempfile
+            temp_backup = Path(tempfile.gettempdir()) / "okypbot_ml_backups"
+            temp_backup.mkdir(parents=True, exist_ok=True)
+            self.backup_dir = temp_backup
+            logger.warning(f"⚠️ Backup директория создана в системной temp: {self.backup_dir}")
+        except Exception as e:
+            logger.error(f"❌ Критическая ошибка: не удалось создать backup директорию: {e}")
+            # Самый крайний fallback
+            self.backup_dir = Path(".")
+            logger.error("❌ Используется текущая директория для backup")
     
     def _initialize_advanced_model(self):
         """Инициализирует продвинутую LightGBM модель"""
@@ -189,7 +315,7 @@ class TextClassifier:
             if self.bot_model_adapter and self.bot_model_adapter.is_available():
                 logger.info("✅ Классификатор инициализирован с bot_model")
                 return True
-            elif self.lgb_adapter and self.lgb_adapter.model:
+            elif self.lgb_adapter and hasattr(self.lgb_adapter, 'model') and self.lgb_adapter.model:
                 logger.info("✅ Классификатор инициализирован с LightGBM моделью")
                 return True
             elif self.examples:
@@ -241,9 +367,13 @@ class TextClassifier:
         if not (self.bot_model_adapter and self.bot_model_adapter.is_available()):
             examples_file = Path(MODEL_PATH) / 'examples.pkl'
             if examples_file.exists():
-                with open(examples_file, 'rb') as f:
-                    self.examples = pickle.load(f)
-                    logger.info(f"Загружено {len(self.examples)} fallback примеров")
+                try:
+                    with open(examples_file, 'rb') as f:
+                        self.examples = pickle.load(f)
+                        logger.info(f"Загружено {len(self.examples)} fallback примеров")
+                except Exception as e:
+                    logger.warning(f"Ошибка загрузки examples.pkl: {e}")
+                    self.examples = []
             else:
                 logger.info("Файл с примерами не найден, используется пустой список")
 
@@ -259,29 +389,6 @@ class TextClassifier:
             return np.array([])
         return self.embedder.encode_texts(texts)
 
-    async def train(self, texts: list, labels: list) -> None:
-        """Обучение модели на наборе текстов и меток"""
-        logger.info("Начало обучения модели...")
-        try:
-            # Получаем эмбеддинги для всех текстов
-            X = self.encode_texts(texts)
-            
-            # Кодируем метки
-            unique_labels = sorted(set(labels))
-            self.label_encoder = {label: i for i, label in enumerate(unique_labels)}
-            y = np.array([self.label_encoder[label] for label in labels])
-            
-            # Обучаем классификатор
-            self.classifier.fit(X, y)
-            
-            # Сохраняем модель
-            await self.save_model()
-            logger.info("Модель успешно обучена и сохранена")
-            
-        except Exception as e:
-            logger.error(f"Ошибка при обучении модели: {e}")
-            raise
-
     async def classify(self, text: str) -> tuple[str, float]:
         """Классификация текста с интеграцией bot_model, LightGBM модели и кешированием"""
         try:
@@ -293,19 +400,19 @@ class TextClassifier:
             text_hash = get_text_hash(text)
             
             # Добавляем отладочное логирование
-            logger.info(f"Оригинальный текст: '{text[:100]}'")
-            logger.info(f"Нормализованный текст: '{normalized_text[:100]}'")
-            logger.info(f"Хеш текста: {text_hash}")
+            logger.debug(f"Оригинальный текст: '{text[:100]}'")
+            logger.debug(f"Нормализованный текст: '{normalized_text[:100]}'")
+            logger.debug(f"Хеш текста: {text_hash}")
             
             # Проверяем кеш
             if text_hash in self.classification_cache:
                 cached_result = self.classification_cache[text_hash]
-                logger.info(f"✅ Используем кешированный результат: {cached_result[0]} ({cached_result[1]:.3f})")
+                logger.debug(f"✅ Используем кешированный результат: {cached_result[0]} ({cached_result[1]:.3f})")
                 return cached_result
             
             # Логируем информацию о доступных моделях
             has_bot_model = self.bot_model_adapter and self.bot_model_adapter.is_available()
-            has_lgb = hasattr(self, 'lgb_adapter') and self.lgb_adapter and self.lgb_adapter.model_loaded
+            has_lgb = hasattr(self, 'lgb_adapter') and self.lgb_adapter and hasattr(self.lgb_adapter, 'model_loaded') and self.lgb_adapter.model_loaded
             lgb_status = "отключена" if self.lgb_disabled_by_corrections else "активна"
             logger.info(f"Классифицируем текст (bot_model: {has_bot_model}, LightGBM: {has_lgb and not self.lgb_disabled_by_corrections} ({lgb_status}), fallback данных: {len(getattr(self, '_training_embeddings', []))}, исправлений: {getattr(self, '_user_corrections', 0)}): {text[:50]}...")
             
@@ -558,12 +665,6 @@ class TextClassifier:
                 except Exception as e:
                     logger.error(f"Ошибка переобучения fallback KNN: {e}")
             
-            return True
-            
-        except Exception as e:
-            logger.error(f"Ошибка в train: {e}")
-            return False
-                
             logger.info(f"Добавлен новый пример категории {category}")
             
             # Автосохранение после обучения
@@ -591,8 +692,8 @@ class TextClassifier:
     def enable_lgb_model(self) -> bool:
         """Включает LightGBM модель обратно"""
         try:
-            if hasattr(self, 'lgb_adapter') and self.lgb_adapter and self.lgb_adapter.model:
-                self.lgb_adapter.model_loaded = True
+            if hasattr(self, 'lgb_adapter') and self.lgb_adapter and hasattr(self.lgb_adapter, 'model'):
+                self.lgb_disabled_by_corrections = False
                 logger.info("LightGBM модель включена обратно")
                 return True
             return False
@@ -604,7 +705,7 @@ class TextClassifier:
         """Отключает LightGBM модель для использования KNN"""
         try:
             if hasattr(self, 'lgb_adapter') and self.lgb_adapter:
-                self.lgb_adapter.model_loaded = False
+                self.lgb_disabled_by_corrections = True
                 logger.info("LightGBM модель отключена, используется KNN")
                 return True
             return False
@@ -647,7 +748,9 @@ class TextClassifier:
         try:
             # Упрощенный бэкап только для fallback данных
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_file = f"ml/trained/fallback_backup_{timestamp}.json"
+            
+            # Используем безопасную backup директорию
+            backup_file = self.backup_dir / f"fallback_backup_{timestamp}.json"
             
             backup_data = {
                 'user_corrections': getattr(self, '_user_corrections', 0),
@@ -673,8 +776,14 @@ class TextClassifier:
             return True
             
         try:
-            # Ищем последний файл бэкапа
-            backup_files = list(Path("ml/trained").glob("fallback_backup_*.json"))
+            # Ищем последний файл бэкапа в backup директории
+            backup_files = list(self.backup_dir.glob("fallback_backup_*.json"))
+            if not backup_files:
+                # Проверяем также в старом месте
+                old_backup_dir = Path("ml/trained")
+                if old_backup_dir.exists():
+                    backup_files = list(old_backup_dir.glob("fallback_backup_*.json"))
+            
             if not backup_files:
                 logger.warning("Файлы бэкапа fallback модели не найдены")
                 return False
@@ -723,3 +832,71 @@ class TextClassifier:
         except Exception as e:
             logger.error(f"Ошибка очистки кеша: {e}")
             return 0
+
+    def reset_user_corrections(self):
+        """Сбрасывает счетчик пользовательских исправлений"""
+        self._user_corrections = 0
+        self.lgb_disabled_by_corrections = False
+        logger.info("Счетчик пользовательских исправлений сброшен")
+
+    def get_model_priority(self) -> List[str]:
+        """Возвращает список моделей в порядке приоритета"""
+        priority = []
+        
+        if self.bot_model_adapter and self.bot_model_adapter.is_available():
+            priority.append("bot_model")
+            
+        if (hasattr(self, 'lgb_adapter') and self.lgb_adapter and 
+            hasattr(self.lgb_adapter, 'model') and self.lgb_adapter.model and 
+            not self.lgb_disabled_by_corrections):
+            priority.append("LightGBM")
+            
+        if self.examples:
+            priority.append("KNN")
+            
+        if not priority:
+            priority.append("fallback")
+            
+        return priority
+
+    def health_check(self) -> dict:
+        """Проверка состояния классификатора"""
+        health = {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "models": {
+                "bot_model": {
+                    "available": self.bot_model_adapter is not None and self.bot_model_adapter.is_available(),
+                    "active": self.use_bot_model
+                },
+                "lightgbm": {
+                    "available": (hasattr(self, 'lgb_adapter') and self.lgb_adapter and 
+                                hasattr(self.lgb_adapter, 'model') and self.lgb_adapter.model is not None),
+                    "active": not self.lgb_disabled_by_corrections,
+                    "disabled_by_corrections": self.lgb_disabled_by_corrections
+                },
+                "knn": {
+                    "available": len(self.examples) > 0,
+                    "examples_count": len(self.examples)
+                }
+            },
+            "cache": {
+                "size": len(self.classification_cache),
+                "max_size": self.cache_max_size
+            },
+            "directories": {
+                "backup_dir": str(self.backup_dir),
+                "backup_dir_exists": self.backup_dir.exists() if hasattr(self, 'backup_dir') else False
+            },
+            "stats": {
+                "user_corrections": self._user_corrections,
+                "active_model": self.get_model_priority()[0] if self.get_model_priority() else "none"
+            }
+        }
+        
+        # Проверяем критические проблемы
+        if not any(model["available"] for model in health["models"].values()):
+            health["status"] = "degraded"
+            health["warning"] = "Нет доступных моделей для классификации"
+        
+        return health

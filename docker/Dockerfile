@@ -7,21 +7,11 @@ RUN apt-get update && apt-get install -y \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Создание пользователя для безопасности
+# Создаем пользователя app
 RUN useradd --create-home --shell /bin/bash app
 
-# Создание рабочей директории
-WORKDIR /app
-
-# Копирование requirements и установка зависимостей
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Копирование кода приложения
-COPY . .
-
-# Создание ВСЕХ возможных директорий заранее (включая ml/models/backups)
-RUN mkdir -p \
+# Создаем рабочую директорию и все поддиректории СРАЗУ
+RUN mkdir -p /app \
     /app/data \
     /app/logs \
     /app/ml \
@@ -33,17 +23,43 @@ RUN mkdir -p \
     /app/models/backups \
     /app/temp \
     /app/cache \
-    && chown -R app:app /app
+    && chown -R app:app /app \
+    && chmod -R 755 /app
 
-# Переключение на пользователя app
+# Переключаемся на пользователя app
 USER app
 
-# Экспорт портов
-EXPOSE 8000
+# Устанавливаем рабочую директорию
+WORKDIR /app
+
+# Копируем и устанавливаем зависимости
+COPY --chown=app:app requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Копируем код приложения
+COPY --chown=app:app . .
+
+# Дополнительная проверка и создание директорий от имени app
+RUN mkdir -p \
+    data \
+    logs \
+    ml/models/backups \
+    ml/models/cache \
+    ml/trained \
+    models/backups \
+    temp \
+    cache \
+    || echo "Некоторые директории уже существуют"
+
+# Добавляем пользовательские пакеты в PATH
+ENV PATH=/home/app/.local/bin:$PATH
 
 # Переменные окружения
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
+
+# Экспорт портов
+EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
