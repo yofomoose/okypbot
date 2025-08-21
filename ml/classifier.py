@@ -120,7 +120,7 @@ class TextClassifier:
         self.last_save = datetime.now()
         self.save_interval = timedelta(minutes=5)
         self.backup_dir = Path(MODEL_PATH) / "backups"
-        self.backup_dir.mkdir(exist_ok=True)
+        self.backup_dir.mkdir(parents=True, exist_ok=True)
     
     def _initialize_advanced_model(self):
         """Инициализирует продвинутую LightGBM модель"""

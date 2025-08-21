@@ -20,8 +20,19 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Копирование кода приложения
 COPY . .
 
-# Создание директорий для данных
-RUN mkdir -p /app/data /app/logs /app/ml/models \
+# Создание ВСЕХ возможных директорий заранее (включая ml/models/backups)
+RUN mkdir -p \
+    /app/data \
+    /app/logs \
+    /app/ml \
+    /app/ml/models \
+    /app/ml/models/backups \
+    /app/ml/models/cache \
+    /app/ml/trained \
+    /app/models \
+    /app/models/backups \
+    /app/temp \
+    /app/cache \
     && chown -R app:app /app
 
 # Переключение на пользователя app
