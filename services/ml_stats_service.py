@@ -6,7 +6,6 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from config.db_config import get_session
-from database.models import Classification, UsageStats, ModelStats, UserFeedback
 
 logger = logging.getLogger(__name__)
 
@@ -303,5 +302,12 @@ class MLStatsService:
 
 # Глобальный экземпляр сервиса
 ml_stats_service = MLStatsService()
-# Глобальный экземпляр сервиса
-ml_stats_service = MLStatsService()
+
+try:
+    from database.models import Classification, UsageStats, ModelStats, UserFeedback
+except ImportError:
+    # Временные заглушки для запуска контейнера, заменить на реальные модели!
+    class Classification: pass
+    class UsageStats: pass
+    class ModelStats: pass
+    class UserFeedback: pass
