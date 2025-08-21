@@ -13,7 +13,7 @@ from keyboards.registration import (
     get_registration_confirmation_keyboard,
     get_phone_request_keyboard
 )
-from keyboards.main import get_main_menu
+from keyboards.main import get_main_menu, get_user_role
 from utils.validators import (
     validate_phone, 
     format_phone, 
@@ -305,12 +305,13 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext):
                 okdesk_company_id=company_id
             )
             
+            user_role = get_user_role(callback.from_user.id)
             await callback.message.edit_text(
                 "🎉 **Регистрация завершена успешно!**\n\n"
                 "✅ Вы успешно зарегистрированы в системе Okdesk.\n"
                 "🚀 Теперь вы можете пользоваться всеми функциями бота!\n\n"
                 "Используйте команду /menu для доступа к основному меню.",
-                reply_markup=get_main_menu()
+                reply_markup=get_main_menu(user_role)
             )
             
         except Exception as e:

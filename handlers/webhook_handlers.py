@@ -6,7 +6,7 @@ from aiogram.types import CallbackQuery, Message
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from services.okdesk_service import OkdeskService
-from keyboards.main import get_main_menu, get_client_issue_menu
+from keyboards.main import get_main_menu, get_client_issue_menu, get_user_role
 from keyboards.specialist import get_specialist_reply_keyboard, get_issue_status_keyboard
 import logging
 
@@ -59,26 +59,28 @@ async def process_client_reply(message: Message, state: FSMContext):
             author_type="contact"
         )
         
+        user_role = get_user_role(message.from_user.id)
         if success:
             await message.answer(
                 f"✅ Ваш ответ по заявке #{issue_id} отправлен!\n\n"
                 f"Специалист получит уведомление и скоро ответит.",
-                reply_markup=get_main_menu()
+                reply_markup=get_main_menu(user_role)
             )
         else:
             await message.answer(
                 f"❌ Не удалось отправить ответ по заявке #{issue_id}.\n"
                 f"Попробуйте позже или обратитесь в поддержку.",
-                reply_markup=get_main_menu()
+                reply_markup=get_main_menu(user_role)
             )
         
         await state.clear()
         
     except Exception as e:
         logger.error(f"Ошибка отправки ответа клиента: {e}")
+        user_role = get_user_role(message.from_user.id)
         await message.answer(
             "❌ Произошла ошибка при отправке ответа",
-            reply_markup=get_main_menu()
+            reply_markup=get_main_menu(user_role)
         )
         await state.clear()
 
@@ -136,11 +138,12 @@ async def handle_close_issue(callback: CallbackQuery):
         success = await okdesk_service.update_issue_status(issue_id, "closed")
         
         if success:
+            user_role = get_user_role(callback.from_user.id)
             await callback.message.answer(
                 f"✅ Заявка #{issue_id} закрыта!\n\n"
                 f"Спасибо за использование нашего сервиса. "
                 f"Если у вас возникнут новые вопросы, создайте новую заявку.",
-                reply_markup=get_main_menu()
+                reply_markup=get_main_menu(user_role)
             )
         else:
             await callback.answer("❌ Не удалось закрыть заявку", show_alert=True)

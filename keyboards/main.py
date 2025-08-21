@@ -2,9 +2,43 @@
 Основные клавиатуры для телеграмм бота
 """
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from config import ADMIN_IDS
 
-def get_main_menu() -> InlineKeyboardMarkup:
-    """Главное меню бота"""
+def get_user_role(user_id: int) -> str:
+    """Определяет роль пользователя"""
+    if user_id in ADMIN_IDS:
+        return "admin"
+    # В будущем можно добавить логику для specialist
+    return "user"
+
+def get_main_menu(user_role: str = "user") -> InlineKeyboardMarkup:
+    """Главное меню бота (адаптировано под роль пользователя)"""
+    # Базовые кнопки для всех пользователей
+    keyboard_layout = [
+        [
+            InlineKeyboardButton(text="🎫 Создать заявку", callback_data="create_issue"),
+            InlineKeyboardButton(text="📋 Мои заявки", callback_data="my_issues")
+        ]
+    ]
+    
+    # Дополнительные кнопки только для админов и специалистов
+    if user_role in ["admin", "specialist"]:
+        keyboard_layout.extend([
+            [
+                InlineKeyboardButton(text="⚡ Быстрая заявка", callback_data="quick_issue_info"),
+                InlineKeyboardButton(text="🤖 ML Классификатор", callback_data="ml_classify")
+            ],
+            [
+                InlineKeyboardButton(text="👤 Профиль", callback_data="profile"),
+                InlineKeyboardButton(text="📊 Статистика", callback_data="stats")
+            ]
+        ])
+    
+    keyboard = InlineKeyboardMarkup(inline_keyboard=keyboard_layout)
+    return keyboard
+
+def get_main_menu_legacy() -> InlineKeyboardMarkup:
+    """Старое главное меню бота (для совместимости)"""
     keyboard = InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(text="🎫 Создать заявку", callback_data="create_issue"),

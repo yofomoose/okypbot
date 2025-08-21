@@ -8,10 +8,14 @@ import shutil
 import os
 import re
 import hashlib
+import json
 from datetime import datetime, timedelta
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.preprocessing import LabelEncoder
 from sklearn.exceptions import NotFittedError
+
+# Настройка логгера
+logger = logging.getLogger(__name__)
 
 def normalize_text(text: str) -> str:
     """Нормализует текст для стабильной классификации"""
@@ -47,60 +51,74 @@ def get_text_hash(text: str) -> str:
     return hashlib.md5(normalized.encode('utf-8')).hexdigest()
 
 # Временные константы для ML
-CATEGORIES = {
+# Устаревшие категории - оставляем только для совместимости с fallback
+FALLBACK_CATEGORIES = {
     "Техника": ["Компьютеры", "Принтеры", "Сеть"],
     "Программы": ["ОС", "Приложения", "Драйверы"],
     "Прочее": ["Консультация", "Прочее"]
 }
 MODEL_PATH = "ml/models"
 CONFIDENCE_THRESHOLD = 0.5
-EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 MIN_TEXT_LENGTH = 3
 
-from ml.embeddings import EmbeddingManager
+# Импорты для новой модели
+try:
+    from ml.bot_model_adapter import BotModelAdapter
+    from ml.text_vectorizer import text_vectorizer
+    BOT_MODEL_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"Модель bot_model недоступна: {e}")
+    BOT_MODEL_AVAILABLE = False
 
 logger = logging.getLogger(__name__)
 
-# Заглушка для DataEncryption
-class DataEncryption:
-    @staticmethod
-    def encrypt(data):
-        return data
+# Импорты для старых компонентов (только если bot_model недоступна)  
+try:
+    from ml.embeddings import EmbeddingManager
+    EMBEDDINGS_AVAILABLE = True
+except ImportError as e:
+    logger.warning(f"EmbeddingManager недоступен: {e}")
+    EMBEDDINGS_AVAILABLE = False
     
-    @staticmethod
-    def decrypt(data):
-        return data
-
-
-
-logger = logging.getLogger(__name__)
+    # Заглушка для EmbeddingManager
+    class EmbeddingManager:
+        def encode_text(self, text):
+            return np.random.random(384)
+        def encode_texts(self, texts):
+            return np.random.random((len(texts), 384))
 
 class TextClassifier:
     def __init__(self):
-        self.embedder = EmbeddingManager()
-        self.classifier = KNeighborsClassifier(n_neighbors=5)
-        self.examples = []
-        self.label_encoder = LabelEncoder()
-        
         # Кеш для результатов классификации
         self.classification_cache = {}
         self.cache_max_size = 1000  # Максимальный размер кеша
         
         # Счетчик пользовательских исправлений
-        self.user_corrections_count = 0
-        self._user_corrections = 0  # Добавляем недостающий атрибут
+        self._user_corrections = 0
         self._correction_threshold = 1  # Порог для отключения LightGBM
         self.lgb_disabled_by_corrections = False
-        self.max_corrections_before_disable = 1  # Отключаем LightGBM после первого же исправления
         self.use_lightgbm = True  # Флаг использования LightGBM
         
-        # Интеграция с LightGBM моделью
+        # Приоритет: bot_model > LightGBM > старая KNN
+        self.bot_model_adapter = None
+        self.use_bot_model = True  # Приоритет bot_model
         self.lgb_adapter = None
-        self._initialize_advanced_model()
         
-        self.load_examples()
+        # Fallback компоненты (только если bot_model недоступна)
+        self.embedder = EmbeddingManager() if EMBEDDINGS_AVAILABLE else None
+        self.classifier = KNeighborsClassifier(n_neighbors=5)
+        self.examples = []
+        self.label_encoder = LabelEncoder()
+        
+        # Инициализация моделей
+        self._initialize_bot_model()
+        if not (self.bot_model_adapter and self.bot_model_adapter.is_available()):
+            self._initialize_advanced_model()
+            self.load_examples()
+        
+        # Настройки сохранения
         self.last_save = datetime.now()
-        self.save_interval = timedelta(minutes=5)  # Сохраняем каждые 5 минут
+        self.save_interval = timedelta(minutes=5)
         self.backup_dir = Path(MODEL_PATH) / "backups"
         self.backup_dir.mkdir(exist_ok=True)
     
@@ -127,6 +145,33 @@ class TextClassifier:
             logger.warning(f"Не удалось загрузить LightGBM модель: {e}")
             self.lgb_adapter = None
 
+    def _initialize_bot_model(self):
+        """Инициализирует модель bot_model"""
+        if not BOT_MODEL_AVAILABLE:
+            logger.info("bot_model недоступна")
+            return
+            
+        try:
+            logger.info("Инициализация bot_model...")
+            self.bot_model_adapter = BotModelAdapter()
+            
+            if self.bot_model_adapter.load_model():
+                # Загружаем векторизатор
+                if text_vectorizer.load_model():
+                    logger.info("✅ bot_model успешно инициализирована")
+                    info = self.bot_model_adapter.get_model_info()
+                    logger.info(f"bot_model: {info}")
+                else:
+                    logger.warning("Векторизатор не загружен, bot_model недоступна")
+                    self.bot_model_adapter = None
+            else:
+                logger.info("bot_model не найдена")
+                self.bot_model_adapter = None
+                
+        except Exception as e:
+            logger.warning(f"Не удалось загрузить bot_model: {e}")
+            self.bot_model_adapter = None
+
     async def initialize(self) -> bool:
         """Асинхронная инициализация классификатора"""
         try:
@@ -134,18 +179,24 @@ class TextClassifier:
             # Загружаем примеры
             self.load_examples()
             
+            # Пробуем инициализировать bot_model (приоритет)
+            self._initialize_bot_model()
+            
             # Пробуем инициализировать LightGBM модель
             self._initialize_advanced_model()
             
             # Проверяем состояние
-            if self.lgb_adapter and self.lgb_adapter.model:
-                logger.info("Классификатор инициализирован с LightGBM моделью")
+            if self.bot_model_adapter and self.bot_model_adapter.is_available():
+                logger.info("✅ Классификатор инициализирован с bot_model")
+                return True
+            elif self.lgb_adapter and self.lgb_adapter.model:
+                logger.info("✅ Классификатор инициализирован с LightGBM моделью")
                 return True
             elif self.examples:
-                logger.info("Классификатор инициализирован с базовой моделью")
+                logger.info("✅ Классификатор инициализирован с базовой моделью")
                 return True
             else:
-                logger.warning("Классификатор инициализирован в минимальном режиме")
+                logger.warning("⚠️ Классификатор инициализирован в минимальном режиме")
                 return False
                 
         except Exception as e:
@@ -154,34 +205,57 @@ class TextClassifier:
 
     def get_stats(self) -> dict:
         """Получить статистику модели"""
+        # Определяем активную модель
+        active_model = "Unknown"
+        if self.bot_model_adapter and self.bot_model_adapter.is_available():
+            active_model = "bot_model"
+        elif self.lgb_adapter is not None and hasattr(self.lgb_adapter, 'model') and self.lgb_adapter.model is not None:
+            active_model = "LightGBM"
+        elif self.examples:
+            active_model = "KNN"
+        
         stats = {
             "examples_count": len(self.examples),
+            "has_bot_model": self.bot_model_adapter is not None and self.bot_model_adapter.is_available(),
             "has_lgb_model": self.lgb_adapter is not None and hasattr(self.lgb_adapter, 'model') and self.lgb_adapter.model is not None,
-            "model_type": "LightGBM" if self.lgb_adapter and hasattr(self.lgb_adapter, 'model') and self.lgb_adapter.model else "KNN"
+            "active_model": active_model,
+            "user_corrections": self._user_corrections,
+            "cache_size": len(self.classification_cache),
+            "use_bot_model": self.use_bot_model
         }
         
+        # Добавляем статистику bot_model
+        if self.bot_model_adapter and self.bot_model_adapter.is_available():
+            bot_stats = self.bot_model_adapter.get_stats()
+            stats["bot_model"] = bot_stats
+            
+        # Добавляем статистику LightGBM
         if self.lgb_adapter:
             model_info = self.lgb_adapter.get_model_info()
-            stats.update(model_info)
+            stats["lightgbm"] = model_info
             
         return stats
 
     def load_examples(self):
-        examples_file = Path(MODEL_PATH) / 'examples.pkl'
-        if examples_file.exists():
-            with open(examples_file, 'rb') as f:
-                self.examples = pickle.load(f)
-                logger.info(f"Загружено {len(self.examples)} обучающих примеров")
+        """Загружает старые примеры только для fallback"""
+        if not (self.bot_model_adapter and self.bot_model_adapter.is_available()):
+            examples_file = Path(MODEL_PATH) / 'examples.pkl'
+            if examples_file.exists():
+                with open(examples_file, 'rb') as f:
+                    self.examples = pickle.load(f)
+                    logger.info(f"Загружено {len(self.examples)} fallback примеров")
+            else:
+                logger.info("Файл с примерами не найден, используется пустой список")
 
     def encode_text(self, text: str) -> np.ndarray:
-        """Получение эмбеддинга для одного текста"""
-        if not text:
+        """Получение эмбеддинга для одного текста (fallback)"""
+        if not text or not self.embedder:
             return np.array([])
         return self.embedder.encode_text(text)
     
     def encode_texts(self, texts: List[str]) -> np.ndarray:
-        """Получение эмбеддингов для списка текстов"""
-        if not texts:
+        """Получение эмбеддингов для списка текстов (fallback)"""
+        if not texts or not self.embedder:
             return np.array([])
         return self.embedder.encode_texts(texts)
 
@@ -209,7 +283,7 @@ class TextClassifier:
             raise
 
     async def classify(self, text: str) -> tuple[str, float]:
-        """Классификация текста с интеграцией LightGBM модели и кешированием"""
+        """Классификация текста с интеграцией bot_model, LightGBM модели и кешированием"""
         try:
             if not text or len(text) < MIN_TEXT_LENGTH:
                 return "Текст слишком короткий", 0.0
@@ -230,14 +304,30 @@ class TextClassifier:
                 return cached_result
             
             # Логируем информацию о доступных моделях
+            has_bot_model = self.bot_model_adapter and self.bot_model_adapter.is_available()
             has_lgb = hasattr(self, 'lgb_adapter') and self.lgb_adapter and self.lgb_adapter.model_loaded
             lgb_status = "отключена" if self.lgb_disabled_by_corrections else "активна"
-            logger.info(f"Классифицируем текст (LightGBM: {has_lgb and not self.lgb_disabled_by_corrections} ({lgb_status}), KNN примеров: {len(self.examples)}, исправлений: {self.user_corrections_count}): {text[:50]}...")
+            logger.info(f"Классифицируем текст (bot_model: {has_bot_model}, LightGBM: {has_lgb and not self.lgb_disabled_by_corrections} ({lgb_status}), fallback данных: {len(getattr(self, '_training_embeddings', []))}, исправлений: {getattr(self, '_user_corrections', 0)}): {text[:50]}...")
             
             result = None
             
-            # Пытаемся использовать продвинутую LightGBM модель если доступна и не отключена
-            if has_lgb and not self.lgb_disabled_by_corrections:
+            # 1. Приоритет: Пытаемся использовать bot_model
+            if has_bot_model and self.use_bot_model:
+                try:
+                    logger.info("Используем bot_model для классификации")
+                    # Векторизуем текст
+                    vector = text_vectorizer.vectorize(normalized_text)
+                    features = vector.reshape(1, -1)  # Преобразуем в формат (1, 384)
+                    
+                    # Получаем предсказание
+                    category, confidence = self.bot_model_adapter.predict(features)
+                    logger.info(f"bot_model предсказание: {category} ({confidence:.3f})")
+                    result = (category, confidence)
+                except Exception as e:
+                    logger.warning(f"Ошибка в bot_model предсказании: {e}")
+            
+            # 2. Fallback: Пытаемся использовать продвинутую LightGBM модель если доступна и не отключена
+            if not result and has_lgb and not self.lgb_disabled_by_corrections:
                 try:
                     lgb_result = self.lgb_adapter.predict(normalized_text)
                     if lgb_result:
@@ -247,7 +337,7 @@ class TextClassifier:
                 except Exception as e:
                     logger.warning(f"Ошибка в LightGBM предсказании: {e}")
                     
-            # Если LightGBM отключена или дала плохой результат, используем KNN
+            # 3. Fallback: Если другие модели не сработали, используем KNN
             if not result:
                 if self.examples:
                     logger.info("Используем KNN классификатор")
@@ -300,6 +390,16 @@ class TextClassifier:
 
     def get_categories(self) -> List[str]:
         """Возвращает список доступных категорий для классификации"""
+        # Если есть bot_model, получаем категории из неё (приоритет)
+        if hasattr(self, 'bot_model_adapter') and self.bot_model_adapter and self.bot_model_adapter.is_available():
+            try:
+                bot_categories = self.bot_model_adapter.get_categories()
+                if bot_categories:
+                    logger.info(f"Возвращаем {len(bot_categories)} категорий из bot_model")
+                    return bot_categories
+            except Exception as e:
+                logger.warning(f"Ошибка получения категорий из bot_model: {e}")
+        
         # Если есть LightGBM модель, получаем категории из неё
         if hasattr(self, 'lgb_adapter') and self.lgb_adapter and hasattr(self.lgb_adapter, 'get_categories'):
             try:
@@ -309,32 +409,41 @@ class TextClassifier:
             except Exception as e:
                 logger.warning(f"Ошибка получения категорий из LightGBM: {e}")
         
-        # Иначе возвращаем стандартные категории
-        # Если CATEGORIES - это словарь, извлекаем все подкатегории
-        if isinstance(CATEGORIES, dict):
+        # Иначе возвращаем fallback категории
+        # Если FALLBACK_CATEGORIES - это словарь, извлекаем все подкатегории
+        if isinstance(FALLBACK_CATEGORIES, dict):
             all_categories = []
-            for main_cat, sub_cats in CATEGORIES.items():
+            for main_cat, sub_cats in FALLBACK_CATEGORIES.items():
                 all_categories.append(main_cat)  # Добавляем основную категорию
                 if isinstance(sub_cats, list):
                     all_categories.extend(sub_cats)  # Добавляем подкатегории
             return all_categories
-        elif isinstance(CATEGORIES, list):
-            return CATEGORIES
+        elif isinstance(FALLBACK_CATEGORIES, list):
+            return FALLBACK_CATEGORIES
         else:
-            return []
+            return ["Прочее"]  # Последний fallback
 
     async def get_examples_count(self) -> int:
         """Возвращает количество обучающих примеров"""
-        return len(self.examples)
+        # Если bot_model активна, возвращаем её статистику
+        if self.bot_model_adapter and self.bot_model_adapter.is_available():
+            return self.bot_model_adapter.get_training_examples_count()
+        
+        # Иначе возвращаем количество fallback примеров
+        return len(getattr(self, '_training_embeddings', []))
 
     async def save_model(self) -> bool:
-        """Сохраняет модель и эмбеддинги"""
+        """Сохраняет fallback модель (только если bot_model недоступна)"""
+        if self.bot_model_adapter and self.bot_model_adapter.is_available():
+            logger.info("bot_model активна, сохранение fallback модели пропущено")
+            return True
+            
         try:
             # Создаем временную директорию, которая автоматически удалится после выхода из контекста
             with tempfile.TemporaryDirectory() as temp_dir:
                 # Создаем пути к временным файлам
-                temp_model = Path(temp_dir) / "model.pkl"
-                temp_encoder = Path(temp_dir) / "label_encoder.pkl"
+                temp_model = Path(temp_dir) / "fallback_model.pkl"
+                temp_encoder = Path(temp_dir) / "fallback_label_encoder.pkl"
                 
                 # Сохраняем файлы во временную директорию
                 with open(temp_model, 'wb') as f:
@@ -346,8 +455,8 @@ class TextClassifier:
                 os.makedirs(MODEL_PATH, exist_ok=True)
                 
                 # Перемещаем файлы в целевую директорию
-                shutil.copy2(temp_model, Path(MODEL_PATH) / 'classifier.pkl')
-                shutil.copy2(temp_encoder, Path(MODEL_PATH) / 'label_encoder.pkl')
+                shutil.copy2(temp_model, Path(MODEL_PATH) / 'fallback_classifier.pkl')
+                shutil.copy2(temp_encoder, Path(MODEL_PATH) / 'fallback_label_encoder.pkl')
                 
                 return True
                 
@@ -356,8 +465,25 @@ class TextClassifier:
             return False
 
     async def load_model(self) -> bool:
-        """Загружает модель"""
+        """Загружает fallback модель (только если bot_model недоступна)"""
+        if self.bot_model_adapter and self.bot_model_adapter.is_available():
+            logger.info("bot_model активна, загрузка fallback модели пропущена")
+            return True
+            
         try:
+            # Сначала пытаемся загрузить fallback файлы
+            fallback_model_file = Path(MODEL_PATH) / 'fallback_classifier.pkl'
+            fallback_encoder_file = Path(MODEL_PATH) / 'fallback_label_encoder.pkl'
+            
+            if fallback_model_file.exists() and fallback_encoder_file.exists():
+                with open(fallback_model_file, 'rb') as f:
+                    self.classifier = pickle.load(f)
+                with open(fallback_encoder_file, 'rb') as f:
+                    self.label_encoder = pickle.load(f)
+                logger.info("Загружена fallback модель")
+                return True
+            
+            # Если fallback нет, пытаемся загрузить старые файлы
             model_file = Path(MODEL_PATH) / 'classifier.pkl'
             encoder_file = Path(MODEL_PATH) / 'label_encoder.pkl'
             
@@ -366,24 +492,32 @@ class TextClassifier:
                     self.classifier = pickle.load(f)
                 with open(encoder_file, 'rb') as f:
                     self.label_encoder = pickle.load(f)
+                logger.info("Загружена старая модель")
                 return True
+                
             return False
             
         except Exception as e:
-            logger.error(f"Ошибка загрузки модели: {e}")
+            logger.error(f"Ошибка загрузки fallback модели: {e}")
             return False
 
     async def train(self, text: str, category: str, user_id: int) -> bool:
-        """Обучение на одном примере"""
+        """Обучение на одном примере (для bot_model используется отдельная система)"""
         try:
-            # Увеличиваем счетчик пользовательских исправлений
-            self.user_corrections_count += 1
-            logger.info(f"Пользовательское исправление #{self.user_corrections_count}: '{category}'")
+            # Если bot_model активна, логируем но не обучаем старую модель
+            if self.bot_model_adapter and self.bot_model_adapter.is_available():
+                logger.info(f"Обучающий пример для будущего дообучения bot_model: '{text[:50]}...' -> '{category}'")
+                # TODO: Здесь можно сохранять примеры для будущего переобучения bot_model
+                return True
+            
+            # Увеличиваем счетчик пользовательских исправлений для fallback модели
+            self._user_corrections += 1
+            logger.info(f"Fallback обучение #{self._user_corrections}: '{category}'")
             
             # Отключаем LightGBM после нескольких исправлений
-            if self.user_corrections_count >= self.max_corrections_before_disable and not self.lgb_disabled_by_corrections:
+            if self._user_corrections >= self._correction_threshold and not self.lgb_disabled_by_corrections:
                 self.lgb_disabled_by_corrections = True
-                logger.warning(f"🚫 LightGBM модель отключена после {self.user_corrections_count} исправлений. Переключаемся на KNN с пользовательскими данными.")
+                logger.warning(f"🚫 LightGBM модель отключена после {self._user_corrections} исправлений.")
             
             # Проверка валидности категории
             valid_categories = self.get_categories()
@@ -396,48 +530,39 @@ class TextClassifier:
                 logger.warning(f"Текст слишком короткий: {len(text)} символов")
                 return False
                 
-            # Получаем эмбеддинг
-            embedding = self.encode_text(text)
-            if embedding.size == 0:
-                logger.error("Ошибка получения эмбеддинга")
+            # Получаем эмбеддинг только если embedder доступен
+            if not self.embedder:
+                logger.warning("Embedder недоступен для fallback обучения")
                 return False
                 
-            # Создаем пример
-            example = {
-                'text': text,
-                'category': category, 
-                'embedding': embedding,
-                'user_id': user_id,
-                'created_at': datetime.utcnow()
-            }
+            embedding = self.encode_text(text)
+            if embedding.size == 0:
+                logger.warning("Не удалось получить эмбеддинг для fallback обучения")
+                return False
             
-            # Добавляем в примеры
-            self.examples.append(example)
+            # Добавляем пример в fallback обучающие данные
+            if not hasattr(self, '_training_embeddings'):
+                self._training_embeddings = []
+                self._training_labels = []
             
-            # Сохраняем примеры
-            examples_file = Path(MODEL_PATH) / 'examples.pkl'
-            with open(examples_file, 'wb') as f:
-                pickle.dump(self.examples, f)
+            self._training_embeddings.append(embedding)
+            self._training_labels.append(category)
             
-            # Переобучаем если достаточно примеров
-            if len(self.examples) > 1:
-                X = np.array([x['embedding'] for x in self.examples])
-                y = np.array([x['category'] for x in self.examples])
-                self.classifier.fit(X, y)
-                
-                # Сохраняем обновленную модель
-                await self.save_model()
-                
-            # Очищаем все кеши, чтобы новые классификации учитывали добавленный пример
-            cache_size_before = len(self.classification_cache)
-            self.classification_cache.clear()
+            # Переобучаем fallback KNN модель
+            if hasattr(self, 'knn_model') and self.knn_model:
+                try:
+                    X = np.array(self._training_embeddings)
+                    y = np.array(self._training_labels)
+                    self.knn_model.fit(X, y)
+                    logger.info(f"✅ Fallback KNN модель переобучена на {len(self._training_embeddings)} примерах")
+                except Exception as e:
+                    logger.error(f"Ошибка переобучения fallback KNN: {e}")
             
-            # Также очищаем кеш LightGBM адаптера
-            lgb_cache_size = 0
-            if hasattr(self, 'lgb_adapter') and self.lgb_adapter and hasattr(self.lgb_adapter, 'clear_cache'):
-                lgb_cache_size = self.lgb_adapter.clear_cache()
+            return True
             
-            logger.info(f"🗑️ Очищен кеш классификации ({cache_size_before} записей) и LightGBM ({lgb_cache_size} записей) после добавления нового примера")
+        except Exception as e:
+            logger.error(f"Ошибка в train: {e}")
+            return False
                 
             logger.info(f"Добавлен новый пример категории {category}")
             
@@ -490,8 +615,9 @@ class TextClassifier:
     async def classify_batch(self, texts: List[str]) -> List[Tuple[str, float]]:
         """Пакетная классификация текстов"""
         try:
-            if not self.examples:
-                return [("Нет обучающих примеров", 0.0)] * len(texts)
+            # Проверяем доступность модели
+            if not (self.bot_model_adapter and self.bot_model_adapter.is_available()) and not hasattr(self, '_training_embeddings'):
+                return [("Нет доступных моделей", 0.0)] * len(texts)
                 
             results = []
             for text in texts:
@@ -513,38 +639,87 @@ class TextClassifier:
             self.last_save = now
 
     async def backup_model(self) -> bool:
-        """Создает резервную копию модели и данных"""
-        try:
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            backup_path = self.backup_dir / f"backup_{timestamp}"
-            backup_path.mkdir(exist_ok=True)
-
-            # Копируем файлы модели
-            shutil.copy2(Path(MODEL_PATH) / "classifier.pkl", backup_path / "classifier.pkl")
-            shutil.copy2(Path(MODEL_PATH) / "examples.pkl", backup_path / "examples.pkl")
-            
-            # Удаляем старые бэкапы (оставляем последние 5)
-            backups = sorted(self.backup_dir.glob("backup_*"))
-            if len(backups) > 5:
-                for old_backup in backups[:-5]:
-                    shutil.rmtree(old_backup)
-                    
+        """Создает резервную копию fallback модели (только если bot_model недоступна)"""
+        if self.bot_model_adapter and self.bot_model_adapter.is_available():
+            logger.info("bot_model активна, бэкап fallback модели пропущен")
             return True
+            
+        try:
+            # Упрощенный бэкап только для fallback данных
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            backup_file = f"ml/trained/fallback_backup_{timestamp}.json"
+            
+            backup_data = {
+                'user_corrections': getattr(self, '_user_corrections', 0),
+                'training_examples': getattr(self, '_training_embeddings', []),
+                'training_labels': getattr(self, '_training_labels', []),
+                'timestamp': timestamp
+            }
+            
+            with open(backup_file, 'w', encoding='utf-8') as f:
+                json.dump(backup_data, f, ensure_ascii=False, indent=2, default=str)
+                
+            logger.info(f"Fallback модель сохранена в {backup_file}")
+            return True
+            
         except Exception as e:
-            logger.error(f"Ошибка создания бэкапа: {e}")
+            logger.error(f"Ошибка создания бэкапа fallback модели: {e}")
             return False
 
     def load_latest_backup(self) -> bool:
-        """Загружает последний бэкап если основные файлы повреждены"""
+        """Загружает последний бэкап fallback модели (только если bot_model недоступна)"""
+        if self.bot_model_adapter and self.bot_model_adapter.is_available():
+            logger.info("bot_model активна, загрузка fallback бэкапа пропущена")
+            return True
+            
         try:
-            backups = sorted(self.backup_dir.glob("backup_*"))
-            if not backups:
+            # Ищем последний файл бэкапа
+            backup_files = list(Path("ml/trained").glob("fallback_backup_*.json"))
+            if not backup_files:
+                logger.warning("Файлы бэкапа fallback модели не найдены")
                 return False
 
-            latest_backup = backups[-1]
-            shutil.copy2(latest_backup / "classifier.pkl", Path(MODEL_PATH) / "classifier.pkl")
-            shutil.copy2(latest_backup / "examples.pkl", Path(MODEL_PATH) / "examples.pkl")
+            latest_backup = max(backup_files, key=lambda f: f.stat().st_mtime)
+            
+            with open(latest_backup, 'r', encoding='utf-8') as f:
+                backup_data = json.load(f)
+            
+            # Восстанавливаем данные
+            self._user_corrections = backup_data.get('user_corrections', 0)
+            self._training_embeddings = backup_data.get('training_examples', [])
+            self._training_labels = backup_data.get('training_labels', [])
+            
+            logger.info(f"Fallback модель восстановлена из {latest_backup}")
             return True
+            
         except Exception as e:
-            logger.error(f"Ошибка загрузки бэкапа: {e}")
+            logger.error(f"Ошибка загрузки бэкапа fallback модели: {e}")
             return False
+
+    def clear_cache(self) -> int:
+        """Очищает кеш классификации и возвращает количество удаленных записей"""
+        try:
+            cache_size = len(getattr(self, 'classification_cache', {}))
+            
+            # Очищаем кеш классификации
+            if hasattr(self, 'classification_cache'):
+                self.classification_cache.clear()
+            
+            # Очищаем кеш LightGBM если доступен
+            lgb_cache_size = 0
+            if hasattr(self, 'lgb_adapter') and self.lgb_adapter and hasattr(self.lgb_adapter, 'clear_cache'):
+                lgb_cache_size = self.lgb_adapter.clear_cache()
+            
+            # Очищаем кеш bot_model если доступен
+            bot_cache_size = 0
+            if hasattr(self, 'bot_model_adapter') and self.bot_model_adapter and hasattr(self.bot_model_adapter, 'clear_cache'):
+                bot_cache_size = self.bot_model_adapter.clear_cache()
+            
+            total_cleared = cache_size + lgb_cache_size + bot_cache_size
+            logger.info(f"Очищен кеш: классификатор ({cache_size}), LightGBM ({lgb_cache_size}), bot_model ({bot_cache_size})")
+            
+            return total_cleared
+            
+        except Exception as e:
+            logger.error(f"Ошибка очистки кеша: {e}")
+            return 0

@@ -10,7 +10,9 @@ from keyboards.admin_keyboards import (
     get_ml_feedback_keyboard,
     get_category_groups_keyboard, 
     get_category_subcategories_keyboard,
-    update_category_groups_from_ml
+    update_category_groups_from_ml,
+    get_admin_ml_keyboard,
+    get_model_selection_keyboard
 )
 
 logger = logging.getLogger(__name__)
@@ -334,3 +336,79 @@ async def update_okdesk_category(issue_service, issue_id: int, category: str):
     except Exception as e:
         logger.error(f"Ошибка добавления комментария с категорией: {e}")
         raise
+
+# Новые обработчики для bot_model
+@router.callback_query(F.data == "ml_admin_panel")
+async def ml_admin_panel(callback: CallbackQuery):
+    """Панель управления ML моделями"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+    
+    try:
+        from services.ml_service import ml_service
+        stats = ml_service.get_statistics()
+        classifier_stats = stats.get('classifier', {})
+        
+        text = "🎛️ **Панель управления ML**\n\n"
+        text += f"🤖 **Активная модель**: {classifier_stats.get('active_model', 'Unknown')}\n"
+        
+        # Статус моделей
+        if classifier_stats.get('has_bot_model', False):
+            text += "✅ bot_model: Загружена\n"
+        else:
+            text += "❌ bot_model: Не загружена\n"
+            
+        if classifier_stats.get('has_lgb_model', False):
+            text += "✅ LightGBM: Загружена\n"
+        else:
+            text += "❌ LightGBM: Не загружена\n"
+        
+        text += f"\n📊 **Статистика**:\n"
+        text += f"• Размер кеша: {classifier_stats.get('cache_size', 0)}\n"
+        text += f"• Исправлений: {classifier_stats.get('user_corrections', 0)}\n"
+        
+        await callback.message.edit_text(
+            text,
+            parse_mode="Markdown",
+            reply_markup=get_admin_ml_keyboard()
+        )
+        await callback.answer()
+        
+    except Exception as e:
+        logger.error(f"Ошибка в ml_admin_panel: {e}")
+        await callback.answer("❌ Ошибка получения данных")
+
+@router.callback_query(F.data == "bot_model_info")
+async def bot_model_info_callback(callback: CallbackQuery):
+    """Информация о bot_model через callback"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+    
+    try:
+        from handlers.bot_model_handlers import cmd_bot_model_info
+        # Создаем объект Message из callback для совместимости
+        await cmd_bot_model_info(callback.message)
+        await callback.answer()
+        
+    except Exception as e:
+        logger.error(f"Ошибка в bot_model_info_callback: {e}")
+        await callback.answer("❌ Ошибка получения информации")
+
+@router.callback_query(F.data == "test_bot_model")
+async def test_bot_model_callback(callback: CallbackQuery):
+    """Тестирование bot_model через callback"""
+    if not is_admin(callback.from_user.id):
+        await callback.answer("❌ У вас нет прав администратора", show_alert=True)
+        return
+    
+    try:
+        from handlers.bot_model_handlers import cmd_test_bot_model
+        # Создаем объект Message из callback для совместимости
+        await cmd_test_bot_model(callback.message)
+        await callback.answer()
+        
+    except Exception as e:
+        logger.error(f"Ошибка в test_bot_model_callback: {e}")
+        await callback.answer("❌ Ошибка тестирования")

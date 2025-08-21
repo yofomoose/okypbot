@@ -8,7 +8,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from aiogram.fsm.context import FSMContext
 
 from database.models import db
-from keyboards.main import get_main_menu, get_issue_actions_keyboard, get_back_to_menu_keyboard
+from keyboards.main import get_main_menu, get_issue_actions_keyboard, get_back_to_menu_keyboard, get_user_role
 from keyboards.registration import get_user_type_keyboard
 from api.okdesk_api import OkdeskAPI
 from states.registration import IssueStates, RegistrationStates
@@ -30,6 +30,14 @@ try:
     logger.info("Обработчики создания заявок подключены")
 except ImportError:
     logger.warning("Модуль issue_handlers недоступен, используется базовая функциональность")
+
+# Регистрируем обработчики bot_model
+try:
+    from handlers.bot_model_handlers import router as bot_model_router
+    router.include_router(bot_model_router)
+    logger.info("Обработчики bot_model подключены")
+except ImportError:
+    logger.warning("Модуль bot_model_handlers недоступен")
 
 def check_registration(func):
     """Декоратор для проверки регистрации пользователя (админы пропускаются)"""
@@ -60,12 +68,13 @@ async def cmd_start(message: Message, state: FSMContext):
     
     # Админы проходят сразу в главное меню
     if is_admin(user_id):
+        user_role = get_user_role(user_id)
         await message.answer(
             f"🔧 Добро пожаловать, администратор!\n\n"
             f"👤 Ваш ID: {user_id}\n"
             f"🤖 У вас есть доступ к функциям управления ML системой.\n\n"
             "Выберите действие:",
-            reply_markup=get_main_menu()
+            reply_markup=get_main_menu(user_role)
         )
         return
     
@@ -81,10 +90,11 @@ async def cmd_start(message: Message, state: FSMContext):
         return
     
     user = db.get_user(user_id)
+    user_role = get_user_role(user_id)
     await message.answer(
         f"🏢 Добро пожаловать, {user.full_name}!\n\n"
         "Выберите действие:",
-        reply_markup=get_main_menu()
+        reply_markup=get_main_menu(user_role)
     )
 
 @router.message(Command("help"))
@@ -143,10 +153,26 @@ async def cmd_admin(message: Message):
 • Обучение модели на основе обратной связи
 • Обновление категорий заявок в CRM
 
+🤖 Команды для управления ML:
+• /bot_model - Информация о bot_model
+• /test_bot_model - Тестирование bot_model
+• /ml_admin - Панель управления ML
+
 ℹ️ Уведомления приходят автоматически при создании заявок.
     """
     
-    await message.answer(admin_text, parse_mode="HTML")
+    # Создаем кнопки для быстрого доступа
+    keyboard = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🤖 bot_model", callback_data="bot_model_info"),
+            InlineKeyboardButton(text="📊 ML Статистика", callback_data="ml_stats")
+        ],
+        [
+            InlineKeyboardButton(text="🎛️ Управление ML", callback_data="ml_admin_panel")
+        ]
+    ])
+    
+    await message.answer(admin_text, parse_mode="HTML", reply_markup=keyboard)
 
 @router.message(Command("stats"))
 async def cmd_stats(message: Message):
@@ -224,9 +250,10 @@ async def cmd_profile(message: Message, **kwargs):
 async def show_main_menu(callback: CallbackQuery):
     """Показать главное меню"""
     await callback.answer()
+    user_role = get_user_role(callback.from_user.id)
     await callback.message.edit_text(
         "🏠 **Главное меню**\n\nВыберите действие:",
-        reply_markup=get_main_menu()
+        reply_markup=get_main_menu(user_role)
     )
 
 @router.callback_query(F.data == "issues")

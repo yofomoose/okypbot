@@ -13,7 +13,7 @@ from keyboards.registration import (
     get_registration_confirmation_keyboard,
     get_phone_request_keyboard
 )
-from keyboards.main import get_main_menu
+from keyboards.main import get_main_menu, get_user_role
 from utils.validators import (
     validate_phone, 
     format_phone, 
@@ -394,9 +394,10 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext):
             success_message += "\n🚀 Теперь вы можете пользоваться всеми функциями бота!\n\n"
             success_message += "Используйте команду /menu для доступа к основному меню."
             
+            user_role = get_user_role(callback.from_user.id)
             await callback.message.edit_text(
                 success_message,
-                reply_markup=get_main_menu()
+                reply_markup=get_main_menu(user_role)
             )
                 
     except Exception as e:

@@ -296,3 +296,43 @@ def update_category_groups_from_ml(ml_service) -> None:
                 logger.info(f"Обновлены группы категорий, добавлено {len(lgb_categories)} категорий из LightGBM")
     except Exception as e:
         logger.error(f"Ошибка обновления групп категорий: {e}")
+
+def get_admin_ml_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для управления ML моделями"""
+    buttons = [
+        [
+            InlineKeyboardButton(text="🤖 bot_model инфо", callback_data="bot_model_info"),
+            InlineKeyboardButton(text="🧪 Тест bot_model", callback_data="test_bot_model")
+        ],
+        [
+            InlineKeyboardButton(text="🔄 Сравнить модели", callback_data="model_comparison"),
+            InlineKeyboardButton(text="⚡ LightGBM инфо", callback_data="lightgbm_info")
+        ],
+        [
+            InlineKeyboardButton(text="🎛️ Переключить bot_model", callback_data="toggle_bot_model"),
+            InlineKeyboardButton(text="📊 Статистика ML", callback_data="ml_stats")
+        ],
+        [
+            InlineKeyboardButton(text="◀️ Назад", callback_data="admin_back")
+        ]
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+def get_model_selection_keyboard() -> InlineKeyboardMarkup:
+    """Клавиатура для выбора активной модели"""
+    buttons = [
+        [
+            InlineKeyboardButton(text="🤖 bot_model", callback_data="select_bot_model"),
+            InlineKeyboardButton(text="⚡ LightGBM", callback_data="select_lightgbm")
+        ],
+        [
+            InlineKeyboardButton(text="🔧 KNN (базовая)", callback_data="select_knn"),
+            InlineKeyboardButton(text="🔄 Авто выбор", callback_data="select_auto")
+        ],
+        [
+            InlineKeyboardButton(text="◀️ Назад", callback_data="admin_ml_back")
+        ]
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
