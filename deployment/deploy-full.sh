@@ -58,10 +58,10 @@ echo "🔗 Проверьте webhook endpoint: http://your-domain/webhook/"
 
 # Проверка здоровья
 echo "🔍 Проверка health check..."
-docker-compose -f docker-compose.prod.yml exec bot curl -f http://localhost:8000/health || echo "⚠️ Bot недоступен"
+$DOCKER_COMPOSE -f docker/docker-compose.prod.yml exec bot curl -f http://localhost:8000/health || echo "⚠️ Bot недоступен"
 
 # Получение IP для nginx
-BOT_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' okypbot_app)
+BOT_IP=$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' okypbot_app || echo ":8000")
 echo "🔍 IP бота для nginx: $BOT_IP:8000"
 
 echo "✅ Развертывание завершено!"
