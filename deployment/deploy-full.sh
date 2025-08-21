@@ -23,10 +23,31 @@ get_docker_compose_cmd() {
 DOCKER_COMPOSE=$(get_docker_compose_cmd)
 echo "📦 Используется: $DOCKER_COMPOSE"
 
-# Проверка .env
+# Проверка и создание .env
 if [ ! -f .env ]; then
-    echo "📝 Создайте .env файл"
-    cp .env.production .env
+    if [ -f .env.production ]; then
+        echo "📝 Копирование .env.production в .env"
+        cp .env.production .env
+    else
+        echo "❌ Файл .env.production не найден!"
+        echo "Создайте файл .env.production с настройками или скопируйте .env.example"
+        exit 1
+    fi
+fi
+
+# Загрузка переменных окружения
+echo "🔧 Загрузка переменных окружения..."
+set -a
+source .env
+set +a
+
+# Копирование .env в папку docker для docker-compose
+cp .env docker/.env
+
+# Проверка критических переменных
+if [ -z "$BOT_TOKEN" ] || [ -z "$DB_PASSWORD" ]; then
+    echo "❌ Критические переменные не заданы!"
+    echo "Проверьте .env файл - должны быть заполнены BOT_TOKEN и DB_PASSWORD"
     exit 1
 fi
 

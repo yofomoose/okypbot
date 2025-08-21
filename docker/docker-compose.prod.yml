@@ -7,16 +7,11 @@ services:
       POSTGRES_DB: okypbot
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_INITDB_ARGS: "--auth-host=md5"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./postgres.conf:/etc/postgresql/postgresql.conf
-      - ./pg_hba.conf:/etc/postgresql/pg_hba.conf
-      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5433:5432"  # Публичный порт для удаленного доступа
     restart: unless-stopped
-    command: postgres -c config_file=/etc/postgresql/postgresql.conf -c hba_file=/etc/postgresql/pg_hba.conf
     networks:
       - okypbot-net
     healthcheck:
