@@ -6,9 +6,7 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from config.db_config import get_session
-from ml.models.classification import Classification
-from ml.models.stats import UsageStats, ModelStats
-from ml.models.feedback import UserFeedback
+from database.models import Classification, UsageStats, ModelStats, UserFeedback
 
 logger = logging.getLogger(__name__)
 
@@ -303,5 +301,7 @@ class MLStatsService:
             logger.error(f"Ошибка получения количества новых примеров: {e}")
             return 0
 
+# Глобальный экземпляр сервиса
+ml_stats_service = MLStatsService()
 # Глобальный экземпляр сервиса
 ml_stats_service = MLStatsService()
