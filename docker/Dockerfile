@@ -43,6 +43,13 @@ RUN mkdir -p \
 # Создаем директории для ML моделей и даем права на запись
 VOLUME ["/app/ml/models", "/app/ml/models/backups", "/app/ml/models/cache"]
 
+# Устанавливаем базовые ML зависимости отдельно
+RUN pip install --no-cache-dir numpy>=1.25.0
+
+# Копируем requirements.txt и устанавливаем зависимости
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
 # Устанавливаем переменные окружения для NumPy/SciPy
 ENV OPENBLAS_NUM_THREADS=1 \
     MKL_NUM_THREADS=1 \
