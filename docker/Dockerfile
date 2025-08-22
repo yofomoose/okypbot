@@ -22,6 +22,9 @@ RUN mkdir -p /app \
 
 # Устанавливаем переменную окружения PYTHONPATH
 ENV PYTHONPATH=/app
+
+# Создаем дополнительные директории и устанавливаем права
+RUN mkdir -p \
     /app/ml/models \
     /app/ml/models/backups \
     /app/ml/models/cache \
