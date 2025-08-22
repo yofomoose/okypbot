@@ -122,6 +122,14 @@ restore:
 	@cat $(FILE) | docker exec -i $(CONTAINER_DB) psql -U postgres -d okypbot
 	@echo "✅ База данных восстановлена"
 
+# Обновление
+update:
+	@echo "🔄 Обновление бота..."
+	git pull
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) build bot
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d bot
+	@echo "✅ Бот обновлен"
+
 # ML модель
 check-ml:
 	@echo "🔍 Проверка ML модели..."
