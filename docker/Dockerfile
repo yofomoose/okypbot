@@ -7,7 +7,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     python3-dev \
     build-essential \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
 # Создаем пользователя app
 RUN useradd --create-home --shell /bin/bash app
@@ -50,16 +51,20 @@ WORKDIR /app
 COPY --chown=app:app requirements.txt .
 RUN pip install --no-cache-dir --user -r requirements.txt
 
-# Предварительная установка тяжелых ML зависимостей
+# Предварительная установка базовых зависимостей
+COPY --chown=app:app requirements.txt .
 RUN pip install --no-cache-dir --user \
-    numpy \
-    scipy \
-    scikit-learn \
-    pandas \
-    torch \
-    transformers \
-    sentence-transformers \
-    lightgbm
+    wheel \
+    setuptools \
+    numpy==1.24.3 \
+    scipy==1.11.2
+
+# Установка ML зависимостей по очереди для лучшей кэшируемости
+RUN pip install --no-cache-dir --user torch==2.0.1
+RUN pip install --no-cache-dir --user transformers==4.31.0
+RUN pip install --no-cache-dir --user sentence-transformers==2.2.2
+RUN pip install --no-cache-dir --user scikit-learn==1.3.0
+RUN pip install --no-cache-dir --user lightgbm==3.3.2
 
 # Копируем код приложения
 COPY --chown=app:app . .
