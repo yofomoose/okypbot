@@ -18,6 +18,10 @@ RUN mkdir -p /app \
     /app/data \
     /app/logs \
     /app/ml \
+    /app/database
+
+# Устанавливаем переменную окружения PYTHONPATH
+ENV PYTHONPATH=/app
     /app/ml/models \
     /app/ml/models/backups \
     /app/ml/models/cache \
