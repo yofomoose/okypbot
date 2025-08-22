@@ -126,7 +126,9 @@ restore:
 update:
 	@echo "🔄 Обновление бота..."
 	git pull
-	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) build bot
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) stop bot
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) rm -f bot
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) build --no-cache bot
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d bot
 	@echo "✅ Бот обновлен"
 

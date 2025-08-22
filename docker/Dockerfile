@@ -10,24 +10,33 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/* \
     && python -m pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Создаем пользователя app
-RUN useradd --create-home --shell /bin/bash app
+# Создаем пользователя app с правами sudo
+RUN useradd --create-home --shell /bin/bash app && \
+    apt-get update && \
+    apt-get install -y sudo && \
+    echo "app ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Создаем рабочую директорию и все поддиректории СРАЗУ
 RUN mkdir -p /app \
     /app/data \
     /app/logs \
     /app/ml \
-    /app/database
+    /app/ml/models \
+    /app/ml/trained \
+    /app/database \
+    && chown -R app:app /app \
+    && chmod -R 777 /app
 
 # Устанавливаем переменную окружения PYTHONPATH
 ENV PYTHONPATH=/app
 
-# Устанавливаем базовые ML зависимости отдельно
-RUN pip install --no-cache-dir numpy==1.24.3
-
 # Копируем requirements.txt и устанавливаем зависимости
 COPY requirements.txt .
+
+# Устанавливаем базовые ML зависимости отдельно
+RUN pip install --no-cache-dir numpy==1.24.3 && \
+    pip install --no-cache-dir -r requirements.txt && \
+    pip install --no-cache-dir --upgrade numpy==1.24.3
 
 # Создаем все необходимые директории и устанавливаем права
 RUN mkdir -p \

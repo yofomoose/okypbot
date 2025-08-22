@@ -50,17 +50,11 @@ class MLStatsService:
                     details={
                         'text': text,
                         'category': predicted_category,
-                        'confidence': confidence
+                        'confidence': confidence,
+                        'text_length': len(text)
                     },
                     processing_time=processing_time,
-                    success=True,
-                    action_type="classify",
-                    details={
-                        "category": predicted_category,
-                        "confidence": confidence,
-                        "text_length": len(text)
-                    },
-                    processing_time=processing_time
+                    success=True
                 )
                 session.add(usage_stat)
                 session.commit()
