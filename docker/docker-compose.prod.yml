@@ -7,8 +7,18 @@ services:
       POSTGRES_DB: okypbot
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: ${DB_PASSWORD}
+      # Оптимизация для надежности
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+      PGDATA: /var/lib/postgresql/data/pgdata
+      # Настройки для надежности
+      POSTGRES_MAX_CONNECTIONS: 100
+      POSTGRES_SHARED_BUFFERS: 256MB
+      POSTGRES_EFFECTIVE_CACHE_SIZE: 768MB
+      POSTGRES_WORK_MEM: 16MB
+      POSTGRES_MAINTENANCE_WORK_MEM: 64MB
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - postgres_backup:/var/lib/postgresql/backup
     ports:
       - "5433:5432"  # Публичный порт для удаленного доступа
     restart: unless-stopped
@@ -19,6 +29,18 @@ services:
       interval: 30s
       timeout: 10s
       retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+        reservations:
+          memory: 512M
+    # Конфигурация для автоматического бэкапа
+    command: |
+      bash -c '
+        echo "0 3 * * * postgres pg_dump -U postgres okypbot > /var/lib/postgresql/backup/okypbot_\$(date +\%Y\%m\%d).sql" >> /etc/cron.d/postgres-backup
+        service cron start
+        docker-entrypoint.sh postgres'
 
   # Telegram бот + Webhook сервер (отдельный контейнер)
   bot:
@@ -41,9 +63,11 @@ services:
       - WEBHOOK_PORT=8000
       - ADMIN_IDS=${ADMIN_IDS}
     volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-      - ./ml/models:/app/ml/models  # ML модели
+      - ml_models:/app/ml/models:rw
+      - ml_backups:/app/ml/models/backups:rw
+      - ml_cache:/app/ml/models/cache:rw
+      - bot_logs:/app/logs:rw
+      - bot_data:/app/data:rw
     depends_on:
       postgres:
         condition: service_healthy
@@ -81,7 +105,27 @@ services:
 volumes:
   postgres_data:
     driver: local
+    driver_opts:
+      type: none
+      device: /var/lib/okypbot/postgres/data
+      o: bind
+  postgres_backup:
+    driver: local
+    driver_opts:
+      type: none
+      device: /var/lib/okypbot/postgres/backup
+      o: bind
   nginx_logs:
+    driver: local
+  ml_models:
+    driver: local
+  ml_backups:
+    driver: local
+  ml_cache:
+    driver: local
+  bot_logs:
+    driver: local
+  bot_data:
     driver: local
 
 networks:
