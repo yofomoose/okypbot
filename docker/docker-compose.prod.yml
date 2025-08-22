@@ -36,11 +36,10 @@ services:
         reservations:
           memory: 512M
     # Конфигурация для автоматического бэкапа
-    command: |
-      bash -c '
-        echo "0 3 * * * postgres pg_dump -U postgres okypbot > /var/lib/postgresql/backup/okypbot_\$(date +\%Y\%m\%d).sql" >> /etc/cron.d/postgres-backup
-        service cron start
-        docker-entrypoint.sh postgres'
+    command: >
+      bash -c 'echo "0 3 * * * postgres pg_dump -U postgres okypbot > /var/lib/postgresql/backup/okypbot_$$(date +\\%Y\\%m\\%d).sql" >> /etc/cron.d/postgres-backup &&
+      service cron start &&
+      docker-entrypoint.sh postgres'
 
   # Telegram бот + Webhook сервер (отдельный контейнер)
   bot:
