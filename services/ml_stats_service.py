@@ -6,7 +6,9 @@ import logging
 from typing import Dict, List, Optional, Any
 from datetime import datetime, timedelta
 from config.db_config import get_session, SessionLocal
-from ml.models.tables import Classification, UsageStats, ModelStats, UserFeedback
+from ml.models.tables import Classification
+from ml.models.stats import UsageStats, ModelStats
+from ml.models.feedback import UserFeedback
 from sqlalchemy.exc import SQLAlchemyError
 
 logger = logging.getLogger(__name__)

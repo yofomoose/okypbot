@@ -63,7 +63,7 @@ services:
       - WEBHOOK_PORT=8000
       - ADMIN_IDS=${ADMIN_IDS}
     volumes:
-      - ml_models:/app/ml/models:rw
+      - ../ml:/app/ml:rw
       - ml_backups:/app/ml/models/backups:rw
       - ml_cache:/app/ml/models/cache:rw
       - bot_logs:/app/logs:rw
