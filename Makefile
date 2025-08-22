@@ -134,15 +134,35 @@ train-ml:
 
 # Обслуживание
 clean:
-	@echo "🧹 Очистка..."
+	@echo "🧹 Очистка неиспользуемых ресурсов..."
+	@echo "📊 До очистки:"
+	@docker system df
+	@echo "\n1. Очистка неиспользуемых образов..."
 	docker image prune -f
+	@echo "\n2. Очистка неиспользуемых томов..."
 	docker volume prune -f
-	@echo "✅ Очистка завершена"
+	@echo "\n3. Очистка кэша сборки..."
+	docker builder prune -f
+	@echo "\n📊 После очистки:"
+	@docker system df
+	@echo "\n✅ Очистка завершена"
 
 prune:
-	@echo "🗑️ Полная очистка Docker..."
+	@echo "⚠️ Внимание! Будут удалены ВСЕ неиспользуемые ресурсы Docker!"
+	@echo "� До очистки:"
+	@docker system df
+	@echo "\n�🗑️ Выполняется полная очистка..."
 	docker system prune -a --volumes -f
-	@echo "✅ Очистка завершена"
+	@echo "\n📊 После очистки:"
+	@docker system df
+	@echo "\n✅ Полная очистка завершена"
+
+clean-all: stop prune
+	@echo "♻️ Полная очистка с остановкой контейнеров выполнена"
+
+disk-usage:
+	@echo "📊 Использование диска Docker:"
+	@docker system df -v
 
 .PHONY: help setup deploy update start stop restart rebuild logs logs-bot logs-db status backup restore check-ml train-ml clean prune
 start:
