@@ -23,7 +23,13 @@ RUN mkdir -p /app \
 # Устанавливаем переменную окружения PYTHONPATH
 ENV PYTHONPATH=/app
 
-# Создаем дополнительные директории и устанавливаем права
+# Устанавливаем базовые ML зависимости отдельно
+RUN pip install --no-cache-dir numpy==1.24.3
+
+# Копируем requirements.txt и устанавливаем зависимости
+COPY requirements.txt .
+
+# Создаем все необходимые директории и устанавливаем права
 RUN mkdir -p \
     /app/ml/models \
     /app/ml/models/backups \
@@ -33,21 +39,10 @@ RUN mkdir -p \
     /app/models/backups \
     /app/temp \
     /app/cache \
+    /app/logs \
     && chown -R app:app /app \
     && chmod -R 777 /app \
-    && chmod -R 777 /app/ml/models \
-    && chmod -R 777 /app/ml/models/backups \
-    && chmod -R 777 /app/ml/models/cache \
-    && chmod -R 777 /app/logs
-
-# Создаем директории для ML моделей и даем права на запись
-VOLUME ["/app/ml/models", "/app/ml/models/backups", "/app/ml/models/cache"]
-
-# Устанавливаем базовые ML зависимости отдельно
-RUN pip install --no-cache-dir numpy>=1.25.0
-
-# Копируем requirements.txt и устанавливаем зависимости
-COPY requirements.txt .
+    && find /app -type d -exec chmod 777 {} \;
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Устанавливаем переменные окружения для NumPy/SciPy

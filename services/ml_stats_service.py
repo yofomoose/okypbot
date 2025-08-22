@@ -30,12 +30,10 @@ class MLStatsService:
             # Сохраняем основную классификацию
             classification = Classification(
                 text=text,
-                predicted_category=predicted_category,
+                category=predicted_category,
                 confidence=confidence,
-                user_id=user_id,
-                telegram_user_id=telegram_user_id,
-                model_version=self.current_model_version,
-                processing_time=processing_time
+                created_by=telegram_user_id,
+                created_at=datetime.utcnow()
             )
             session.add(classification)
             session.commit()
@@ -48,6 +46,14 @@ class MLStatsService:
                 usage_stat = UsageStats(
                     user_id=user_id,
                     telegram_user_id=telegram_user_id,
+                    action_type='classify',
+                    details={
+                        'text': text,
+                        'category': predicted_category,
+                        'confidence': confidence
+                    },
+                    processing_time=processing_time,
+                    success=True,
                     action_type="classify",
                     details={
                         "category": predicted_category,
