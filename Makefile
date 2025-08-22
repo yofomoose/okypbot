@@ -6,48 +6,145 @@ COMPOSE_FILE_EXTERNAL = docker/docker-compose.external-nginx.yml
 CONTAINER_BOT = okypbot_app
 CONTAINER_DB = okypbot_postgres
 CONTAINER_NGINX = okypbot_nginx
+SCRIPTS_DIR = scripts
 
 # Определение команды Docker Compose
 DOCKER_COMPOSE := $(shell if command -v docker-compose >/dev/null 2>&1; then echo "docker-compose"; elif docker compose version >/dev/null 2>&1; then echo "docker compose"; else echo "echo 'Error: Docker Compose not found' && exit 1"; fi)
 
+# Цвета для вывода
+GREEN := $(shell tput setaf 2)
+YELLOW := $(shell tput setaf 3)
+RESET := $(shell tput sgr0)
+
 # Помощь
 help:
-	@echo "🤖 OkypBot Management Commands:"
+	@echo "🤖 $(GREEN)OkypBot Management Commands:$(RESET)"
 	@echo ""
-	@echo "  deploy        - Полное развертывание (БД + бот + nginx)"
-	@echo "  deploy-external - Развертывание без nginx (для внешнего nginx)"
-	@echo "  update-bot    - Обновление только бота"
-	@echo "  start         - Запуск всех сервисов"
-	@echo "  start-external - Запуск без nginx"
-	@echo "  stop          - Остановка всех сервисов"
-	@echo "  restart       - Перезапуск всех сервисов"
-	@echo "  logs          - Просмотр логов"
-	@echo "  logs-bot      - Логи только бота"
-	@echo "  logs-db       - Логи только БД"
-	@echo "  logs-nginx    - Логи только nginx"
-	@echo "  status        - Статус сервисов"
-	@echo "  shell-bot     - Подключение к контейнеру бота"
-	@echo "  shell-db      - Подключение к PostgreSQL"
-	@echo "  backup-db     - Бэкап базы данных"
-	@echo "  check-ml      - Проверка ML модели"
-	@echo "  clean         - Очистка неиспользуемых образов"
+	@echo "$(YELLOW)Развертывание:$(RESET)"
+	@echo "  make setup        - Подготовка окружения"
+	@echo "  make deploy       - Полное развертывание (подготовка + сборка + запуск)"
+	@echo "  make update       - Обновление бота"
+	@echo ""
+	@echo "$(YELLOW)Управление сервисами:$(RESET)"
+	@echo "  make start        - Запуск всех сервисов"
+	@echo "  make stop         - Остановка всех сервисов"
+	@echo "  make restart      - Перезапуск всех сервисов"
+	@echo "  make rebuild      - Пересборка и перезапуск"
+	@echo ""
+	@echo "$(YELLOW)Мониторинг:$(RESET)"
+	@echo "  make logs         - Просмотр всех логов"
+	@echo "  make logs-bot     - Логи только бота"
+	@echo "  make logs-db      - Логи только БД"
+	@echo "  make status       - Статус сервисов"
+	@echo ""
+	@echo "$(YELLOW)База данных:$(RESET)"
+	@echo "  make backup       - Создание бэкапа БД"
+	@echo "  make restore FILE=backup.sql - Восстановление из бэкапа"
+	@echo ""
+	@echo "$(YELLOW)ML модель:$(RESET)"
+	@echo "  make check-ml     - Проверка ML модели"
+	@echo "  make train-ml     - Обучение ML модели"
+	@echo ""
+	@echo "$(YELLOW)Обслуживание:$(RESET)"
+	@echo "  make clean        - Очистка неиспользуемых ресурсов"
+	@echo "  make prune        - Полная очистка Docker"
 	@echo ""
 	@echo "🔧 Используется: $(DOCKER_COMPOSE)"
 
+# Подготовка окружения
+setup:
+	@echo "📦 Подготовка окружения..."
+	chmod +x $(SCRIPTS_DIR)/prepare_environment.sh
+	./$(SCRIPTS_DIR)/prepare_environment.sh
+
 # Развертывание
-deploy:
-	chmod +x deployment/deploy-full.sh
-	./deployment/deploy-full.sh
+deploy: setup
+	@echo "🚀 Развертывание..."
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) build --no-cache
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d
+	@echo "✅ Развертывание завершено"
+	@make status
 
-deploy-external:
-	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE_EXTERNAL) up --build -d
-
-# Обновление бота
-update-bot:
-	chmod +x deployment/update-bot.sh
-	./deployment/update-bot.sh
+# Обновление
+update:
+	@echo "🔄 Обновление бота..."
+	git pull
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) build bot
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d bot
+	@echo "✅ Бот обновлен"
 
 # Управление сервисами
+start:
+	@echo "▶️ Запуск сервисов..."
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d
+	@make status
+
+stop:
+	@echo "⏹️ Остановка сервисов..."
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) down
+
+restart:
+	@echo "🔄 Перезапуск сервисов..."
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) restart
+	@make status
+
+rebuild: stop
+	@echo "🏗️ Пересборка..."
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) build --no-cache
+	@make start
+
+# Мониторинг
+logs:
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f
+
+logs-bot:
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f bot
+
+logs-db:
+	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs -f postgres
+
+status:
+	@echo "📊 Статус сервисов:"
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) ps
+
+# База данных
+backup:
+	@echo "💾 Создание бэкапа..."
+	@mkdir -p backups
+	docker exec $(CONTAINER_DB) pg_dump -U postgres okypbot > backups/okypbot_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "✅ Бэкап создан в директории backups/"
+
+restore:
+	@if [ -z "$(FILE)" ]; then \
+		echo "❌ Укажите файл бэкапа: make restore FILE=backup.sql"; \
+		exit 1; \
+	fi
+	@echo "📥 Восстановление из $(FILE)..."
+	cat $(FILE) | docker exec -i $(CONTAINER_DB) psql -U postgres -d okypbot
+	@echo "✅ База данных восстановлена"
+
+# ML модель
+check-ml:
+	@echo "🔍 Проверка ML модели..."
+	docker exec $(CONTAINER_BOT) python -c "from ml.classifier import TextClassifier; print('ML модель работает' if TextClassifier().is_ready() else 'ML модель не готова')"
+
+train-ml:
+	@echo "🧠 Запуск обучения ML модели..."
+	docker exec $(CONTAINER_BOT) python -m ml.trainer
+
+# Обслуживание
+clean:
+	@echo "🧹 Очистка..."
+	docker image prune -f
+	docker volume prune -f
+	@echo "✅ Очистка завершена"
+
+prune:
+	@echo "🗑️ Полная очистка Docker..."
+	docker system prune -a --volumes -f
+	@echo "✅ Очистка завершена"
+
+.PHONY: help setup deploy update start stop restart rebuild logs logs-bot logs-db status backup restore check-ml train-ml clean prune
 start:
 	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d
 

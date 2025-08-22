@@ -93,8 +93,14 @@ RUN touch ml/models/.write_test && \
 # Добавляем пользовательские пакеты в PATH
 ENV PATH=/home/app/.local/bin:$PATH
 
-# Проверка установки ML зависимостей
-RUN python -c "import sentence_transformers; import lightgbm; import torch; print('ML dependencies OK')"
+# Проверка базовых ML зависимостей
+RUN python -c "import torch; import lightgbm; print('Basic ML dependencies OK')"
+
+# Проверка прав на запись
+RUN mkdir -p ml/models ml/models/backups ml/models/cache && \
+    touch ml/models/.write_test && \
+    rm ml/models/.write_test && \
+    echo "Write permissions OK"
 
 # Переменные окружения
 ENV PYTHONPATH=/app

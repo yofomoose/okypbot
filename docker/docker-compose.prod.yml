@@ -104,17 +104,9 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
-    driver_opts:
-      type: none
-      device: /var/lib/okypbot/postgres/data
-      o: bind
+    name: okypbot_postgres_data
   postgres_backup:
-    driver: local
-    driver_opts:
-      type: none
-      device: /var/lib/okypbot/postgres/backup
-      o: bind
+    name: okypbot_postgres_backup
   nginx_logs:
     driver: local
   ml_models:
