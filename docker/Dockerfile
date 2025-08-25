@@ -84,6 +84,9 @@ RUN mkdir -p /app/ml \
 # Копируем код приложения
 COPY --chown=app:app . .
 
+# Копируем модель отдельно, чтобы убедиться что все файлы на месте
+COPY --chown=app:app bot_model/*.pkl bot_model/*.json /app/bot_model/
+
 USER app
 
 CMD ["python", "main.py"]

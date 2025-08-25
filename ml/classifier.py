@@ -24,7 +24,10 @@ class TextClassifier:
     
     def __init__(self):
         self.bot_model_adapter = None
-        self._initialize_bot_model()
+        
+    async def initialize(self) -> bool:
+        """Асинхронная инициализация классификатора"""
+        return await asyncio.get_event_loop().run_in_executor(None, self._initialize_bot_model)
         
     def _initialize_bot_model(self):
         """Инициализирует модель bot_model"""
