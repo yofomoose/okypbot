@@ -1,12 +1,10 @@
 FROM nginx:alpine
 
-# Создаем директории для логов
-RUN mkdir -p /var/log/nginx && \
-    chown -R nginx:nginx /var/log/nginx
-
 # Копируем конфигурационные файлы
-COPY nginx/nginx.conf /etc/nginx/nginx.conf
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
+
+# Проверяем конфигурацию
+RUN nginx -t
 
 # Экспортируем порты
 EXPOSE 80 443
