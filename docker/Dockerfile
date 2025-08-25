@@ -40,13 +40,16 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 # Копируем и устанавливаем requirements.txt
 COPY requirements.txt .
 
-# Устанавливаем numpy отдельно первым
-RUN pip install --no-cache-dir "numpy==1.24.3"
+# Устанавливаем numpy отдельно первым (используем более старую версию для совместимости)
+RUN pip install --no-cache-dir "numpy==1.23.5"
 
-# Устанавливаем scipy и scikit-learn
+# Устанавливаем scipy и scikit-learn с фиксированными версиями
 RUN pip install --no-cache-dir \
-    "scipy==1.11.2" \
-    "scikit-learn==1.3.0"
+    "scipy==1.10.1" \
+    "scikit-learn==1.2.2"
+
+# Проверяем установку numpy
+RUN python -c "import numpy; print(f'NumPy version: {numpy.__version__}')"
 
 # Устанавливаем PyTorch CPU версию
 RUN pip install --no-cache-dir torch==2.0.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
