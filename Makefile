@@ -132,13 +132,49 @@ restore:
 
 # Обновление
 update:
-	@echo "🔄 Обновление бота..."
-	git pull
-	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) stop bot
-	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) rm -f bot
-	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) build --no-cache bot
-	$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d bot
-	@echo "✅ Бот обновлен"
+	@echo "🔄 Начинаем обновление бота..."
+	@echo "1. Проверка изменений..."
+	@git fetch origin
+	@if [ "$$(git rev-parse HEAD)" = "$$(git rev-parse @{u})" ]; then \
+		echo "$(GREEN)✓ Бот уже обновлен до последней версии$(RESET)"; \
+		exit 0; \
+	fi
+	
+	@echo "2. Создание резервной копии БД..."
+	@make backup
+	
+	@echo "3. Получение обновлений..."
+	@if git pull; then \
+		echo "$(GREEN)✓ Код успешно обновлен$(RESET)"; \
+	else \
+		echo "$(RED)❌ Ошибка при получении обновлений$(RESET)"; \
+		exit 1; \
+	fi
+	
+	@echo "4. Проверка изменений в зависимостях..."
+	@if git diff HEAD@{1} --name-only | grep -q "requirements.txt"; then \
+		echo "📦 Обнаружены изменения в requirements.txt"; \
+		echo "5. Полная пересборка контейнера..."; \
+		$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) build --no-cache bot; \
+	else \
+		echo "5. Быстрая пересборка контейнера..."; \
+		$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) build bot; \
+	fi
+	
+	@echo "6. Перезапуск сервисов..."
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) stop bot
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) rm -f bot
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) up -d bot
+	
+	@echo "7. Проверка статуса..."
+	@sleep 5
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) ps bot
+	
+	@echo "8. Проверка логов на ошибки..."
+	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) logs --tail=20 bot
+	
+	@echo "$(GREEN)✅ Бот успешно обновлен!$(RESET)"
+	@echo "💡 Используйте 'make logs' для просмотра полных логов"
 
 # ML модель
 check-ml:

@@ -4,9 +4,11 @@ FROM python:3.11-slim AS base
 # Установка переменных окружения
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
+    PYTHONPATH=/app \
+    PIP_DEFAULT_TIMEOUT=100 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
-    PYTHONPATH=/app
+    PIP_ROOT_USER_ACTION=ignore \
+    PATH="/opt/venv/bin:$PATH"
 
 # Создаем пользователя
 RUN groupadd --gid 1000 app && \
@@ -24,33 +26,35 @@ RUN apt-get update && \
     g++ \
     curl \
     python3-dev \
+    python3-venv \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Копируем requirements.txt
+# Создаем виртуальное окружение
+RUN python -m venv /opt/venv
+ENV PATH="/opt/venv/bin:$PATH"
+
+# Устанавливаем базовые инструменты
+RUN pip install --no-cache-dir --upgrade pip setuptools wheel
+
+# Копируем и устанавливаем requirements.txt
 COPY requirements.txt .
 
-# Устанавливаем зависимости в несколько этапов для лучшего кэширования
-RUN pip install --no-cache-dir wheel setuptools && \
-    pip install --no-cache-dir pip --upgrade && \
-    pip install --no-cache-dir "numpy>=1.24.3" && \
-    pip install --no-cache-dir \
-        "scipy>=1.11.2" \
-        "scikit-learn>=1.3.0" && \
-    pip install --no-cache-dir \
-        "torch>=2.0.1" --index-url https://download.pytorch.org/whl/cpu && \
-    pip install --no-cache-dir \
-        "transformers==4.31.0" \
-        "sentence-transformers==2.2.2" \
-        "lightgbm==3.3.2" && \
-    pip install --no-cache-dir -r requirements.txt
+# Устанавливаем ML зависимости отдельно для лучшего кэширования
+RUN pip install --no-cache-dir \
+    "numpy>=1.24.3" \
+    "scipy>=1.11.2" \
+    "scikit-learn>=1.3.0" \
+    "torch>=2.0.1" --index-url https://download.pytorch.org/whl/cpu
+
+# Устанавливаем остальные зависимости
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Финальный образ
 FROM base AS production
 
-# Копируем установленные пакеты из builder
-COPY --from=builder /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
-COPY --from=builder /usr/local/bin/ /usr/local/bin/
+# Копируем виртуальное окружение из builder
+COPY --from=builder /opt/venv /opt/venv
 
 # Установка минимальных системных зависимостей
 RUN apt-get update && \
@@ -58,46 +62,28 @@ RUN apt-get update && \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаем структуру директорий
-RUN mkdir -p /app/data \
-             /app/logs \
-             /app/ml/models/backups \
-             /app/ml/models/cache \
-             /app/ml/trained \
-             /app/models/backups \
-             /app/temp \
-             /app/cache \
+# Создаем все нужные директории за один RUN
+RUN mkdir -p \
+    /app/data \
+    /app/logs \
+    /app/ml/models/backups \
+    /app/ml/models/cache \
+    /app/ml/trained \
+    /app/models/backups \
+    /app/bot_model \
+    /app/temp \
+    /app/cache \
     && chown -R app:app /app \
     && chmod -R 755 /app
 
 WORKDIR /app
 
-# Создаем структуру директорий
-RUN mkdir -p /app/ml \
-    /app/bot_model \
-    /app/ml/models/backups \
-    /app/ml/models/cache \
-    /app/logs \
-    /app/data \
-    && chown -R app:app /app \
-    && chmod -R 755 /app
-
-# Создаем нужные директории
-RUN mkdir -p /app/bot_model
-
 # Копируем код приложения
 COPY --chown=app:app . .
 
-# Проверяем наличие файлов модели и копируем их отдельно
-RUN echo "Содержимое /app/bot_model до копирования:" && \
-    ls -la /app/bot_model/ || true && \
-    echo "Копируем файлы модели..." && \
-    cp -v /app/bot_model/*.pkl /app/bot_model/*.json /app/bot_model/ 2>/dev/null || true && \
-    echo "Содержимое /app/bot_model после копирования:" && \
-    ls -la /app/bot_model/
-
-# Проверяем права доступа
-RUN chown -R app:app /app/bot_model && \
+# Проверяем наличие файлов модели и их права доступа
+RUN ls -la /app/bot_model/ || true && \
+    chown -R app:app /app/bot_model && \
     chmod -R 755 /app/bot_model
 
 USER app
