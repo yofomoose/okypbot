@@ -3,10 +3,19 @@
 """
 
 import json
-import numpy as np
-import numpy.core._multiarray_umath  # Важный импорт для работы с сохраненными моделями
 import logging
 import gc
+import numpy as np
+
+# Явно импортируем необходимые компоненты numpy
+try:
+    import numpy._core
+    import numpy.core.multiarray
+    import numpy.core._multiarray_umath
+    import numpy.core.numeric
+except ImportError as e:
+    logging.error(f"Ошибка импорта компонентов numpy: {e}")
+    # Продолжаем выполнение, error handling происходит в load_model
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 from .lazy_model_loader import LazyModelLoader
@@ -40,15 +49,24 @@ class BotModelAdapter:
         logger.info("Загрузка модели из bot_model...")
         
         try:
-            # Инициализируем numpy и его компоненты
+            # Проверяем и инициализируем numpy и его компоненты
             try:
-                import numpy
-                numpy.core._multiarray_umath
+                import numpy as np
                 import numpy._core
-                import numpy._core.multiarray
-                logger.info(f"Numpy и его компоненты успешно инициализированы: {numpy.__version__}")
+                import numpy.core.multiarray
+                import numpy.core._multiarray_umath
+                import numpy.core.numeric
+                logger.info(f"Numpy и его компоненты успешно инициализированы: {np.__version__}")
+                
+                # Проверяем наличие критических компонентов
+                required_attrs = ['ndarray', '_multiarray_umath', 'core']
+                for attr in required_attrs:
+                    if not hasattr(np, attr):
+                        raise ImportError(f"Отсутствует критический компонент numpy: {attr}")
+                        
             except ImportError as e:
                 logger.error(f"Ошибка инициализации numpy: {e}")
+                logger.error("Убедитесь, что numpy установлен корректно и все системные зависимости присутствуют")
                 return False
                 
             # Проверяем наличие всех файлов
