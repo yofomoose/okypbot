@@ -70,6 +70,9 @@ RUN mkdir -p /app/data \
 
 WORKDIR /app
 
+# Определяем тома
+VOLUME ["/app/ml", "/app/bot_model", "/app/ml/models/backups", "/app/ml/models/cache", "/app/logs", "/app/data"]
+
 # Копируем код приложения
 COPY --chown=app:app . .
 
