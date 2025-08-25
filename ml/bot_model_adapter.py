@@ -48,9 +48,21 @@ class BotModelAdapter:
                 return False
             
             try:
+                # Проверяем numpy.core
+                try:
+                    import numpy.core.numeric
+                    import numpy.core.multiarray
+                    logger.info("numpy.core компоненты успешно импортированы")
+                except ImportError as e:
+                    logger.error(f"Ошибка импорта numpy.core: {e}")
+                    return False
+
                 # Загружаем классификатор с безопасным режимом pickle
                 with open(self.classifier_path, 'rb') as f:
                     import pickle
+                    raw_bytes = f.read()
+                    logger.info(f"Размер файла модели: {len(raw_bytes)} байт")
+                    f.seek(0)
                     self.classifier = pickle.load(f, encoding='latin1')
                 logger.info(f"Классификатор загружен: {type(self.classifier).__name__}")
                 

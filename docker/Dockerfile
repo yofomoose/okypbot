@@ -32,6 +32,7 @@ RUN apt-get update && \
     libblas-dev \
     liblapack-dev \
     python3-numpy \
+    python3-numpy-dev \
     python3-scipy \
     libssl-dev \
     cmake \
@@ -48,12 +49,16 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 COPY requirements.txt .
 
 # Устанавливаем зависимости для numpy и ML компонентов
+# Устанавливаем numpy отдельно
+RUN pip install --no-cache-dir "numpy==1.24.3" && \
+    python -c "import numpy; print(f'NumPy {numpy.__version__} installed successfully')" && \
+    python -c "from numpy.core import *; print('NumPy core loaded successfully')"
+
+# Устанавливаем остальные ML зависимости
 RUN pip install --no-cache-dir \
-    "numpy==1.24.3" \
     "scikit-learn==1.3.0" \
     "scipy==1.11.2" \
-    "cython>=0.29.0" && \
-    python -c "import numpy; from numpy.core import *; print(f'NumPy {numpy.__version__} with core loaded successfully')"
+    "cython>=0.29.0"
 
 # Устанавливаем PyTorch CPU версию
 RUN pip install --no-cache-dir torch==2.0.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
