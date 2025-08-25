@@ -42,25 +42,26 @@ services:
     image: okypbot:${VERSION:-latest}
     container_name: okypbot_app
     environment:
-      - BOT_TOKEN=${BOT_TOKEN}
-      - OKDESK_API_TOKEN=${OKDESK_API_TOKEN}
-      - OKDESK_BASE_URL=${OKDESK_BASE_URL}
-      - OKDESK_WEBHOOK_SECRET=${OKDESK_WEBHOOK_SECRET}
-      - DB_HOST=postgres
-      - DB_PORT=5432
-      - DB_NAME=okypbot
-      - DB_USER=postgres
-      - DB_PASSWORD=${DB_PASSWORD}
-      - WEBHOOK_ENABLED=true
-      - WEBHOOK_HOST=0.0.0.0
-      - WEBHOOK_PORT=8000
-      - ADMIN_IDS=${ADMIN_IDS}
+      BOT_TOKEN: ${BOT_TOKEN}
+      OKDESK_API_TOKEN: ${OKDESK_API_TOKEN}
+      OKDESK_BASE_URL: ${OKDESK_BASE_URL}
+      OKDESK_WEBHOOK_SECRET: ${OKDESK_WEBHOOK_SECRET}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: okypbot
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      WEBHOOK_ENABLED: 'true'
+      WEBHOOK_HOST: 0.0.0.0
+      WEBHOOK_PORT: 8000
+      ADMIN_IDS: ${ADMIN_IDS}
       # Оптимизация Python
-      - PYTHONUNBUFFERED=1
-      - PYTHONDONTWRITEBYTECODE=1
-      - PYTHONHASHSEED=random
-      - PIP_NO_CACHE_DIR=1
-      - PIP_DISABLE_PIP_VERSION_CHECK=1
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONHASHSEED: random
+      PIP_NO_CACHE_DIR: 1
+      PIP_DISABLE_PIP_VERSION_CHECK: 1
+      PYTHONPATH: /app
     volumes:
       - ./ml:/app/ml:rw
       - ./bot_model:/app/bot_model:ro
