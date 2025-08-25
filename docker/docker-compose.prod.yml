@@ -68,6 +68,7 @@ services:
       - ADMIN_IDS=${ADMIN_IDS}
     volumes:
       - ../ml:/app/ml:rw
+      - ../bot_model:/app/bot_model:ro
       - ml_backups:/app/ml/models/backups:rw
       - ml_cache:/app/ml/models/cache:rw
       - bot_logs:/app/logs:rw

@@ -107,6 +107,14 @@ status:
 	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) ps
 
 # База данных
+migrate:
+	@echo "🔄 Применение миграций..."
+	@for sql in sql/migrations/*.sql; do \
+		echo "Применяем $${sql}..."; \
+		docker exec -i $(CONTAINER_DB) psql -U postgres -d okypbot < $$sql; \
+	done
+	@echo "✅ Миграции применены"
+
 backup:
 	@echo "💾 Создание бэкапа..."
 	@mkdir -p backups

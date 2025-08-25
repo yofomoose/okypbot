@@ -24,6 +24,7 @@ RUN mkdir -p /app \
     /app/ml/models \
     /app/ml/trained \
     /app/database \
+    /app/bot_model \
     && chown -R app:app /app \
     && chmod -R 777 /app
 
