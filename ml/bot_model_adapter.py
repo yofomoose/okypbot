@@ -2,12 +2,13 @@
 Адаптер для интеграции модели из папки bot_model
 """
 
-import pickle
 import json
 import numpy as np
 import logging
+import gc
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
+from .lazy_model_loader import LazyModelLoader
 from datetime import datetime
 
 logger = logging.getLogger(__name__)
@@ -72,31 +73,23 @@ class BotModelAdapter:
                 logger.info(f"Размер файла модели: {filesize} байт")
                 
                 try:
-                    # Пробуем загрузить через joblib с memory mapping
-                    import joblib
-                    if str(self.classifier_path).endswith('.joblib'):
-                        self.classifier = joblib.load(str(self.classifier_path), mmap_mode='r')
-                    else:
-                        # Конвертируем модель если она в формате pickle
-                        logger.info("Конвертация модели из pickle в joblib...")
-                        with open(self.classifier_path, 'rb') as f:
-                            temp_classifier = pickle.load(f, encoding='latin1')
-                        joblib.dump(temp_classifier, str(self.classifier_path).replace('.pkl', '.joblib'), compress=3)
-                        self.classifier = joblib.load(str(self.classifier_path).replace('.pkl', '.joblib'), mmap_mode='r')
-                    
+                    # Используем ленивую загрузку для классификатора
+                    logger.info("Загрузка классификатора через LazyModelLoader...")
+                    classifier_loader = LazyModelLoader(str(self.classifier_path))
+                    self.classifier = classifier_loader.load()
                     logger.info(f"Классификатор загружен: {type(self.classifier).__name__}")
                     
-                    # Аналогично для энкодера
-                    logger.info("Загрузка label encoder...")
-                    if str(self.encoder_path).endswith('.joblib'):
-                        self.label_encoder = joblib.load(str(self.encoder_path))
-                    else:
-                        with open(self.encoder_path, 'rb') as f:
-                            self.label_encoder = pickle.load(f, encoding='latin1')
-                            joblib.dump(self.label_encoder, str(self.encoder_path).replace('.pkl', '.joblib'), compress=3)
-                            self.label_encoder = joblib.load(str(self.encoder_path).replace('.pkl', '.joblib'))
+                    # Очищаем память после загрузки классификатора
+                    gc.collect()
                     
+                    # Загружаем энкодер
+                    logger.info("Загрузка label encoder...")
+                    encoder_loader = LazyModelLoader(str(self.encoder_path))
+                    self.label_encoder = encoder_loader.load()
                     logger.info(f"Энкодер загружен, классов: {len(self.label_encoder.classes_)}")
+                    
+                    # Очищаем память после загрузки энкодера
+                    gc.collect()
                     
                 except Exception as e:
                     logger.error(f"Ошибка при загрузке модели: {str(e)}")
