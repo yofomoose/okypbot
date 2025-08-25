@@ -49,8 +49,8 @@ COPY requirements.txt .
 
 # Устанавливаем зависимости для numpy и ML компонентов
 RUN pip install --no-cache-dir \
-    "numpy==1.26.3" \
-    "scikit-learn==1.7.1" \
+    "numpy==1.24.3" \
+    "scikit-learn==1.3.0" \
     "scipy==1.11.2" \
     "cython>=0.29.0" && \
     python -c "import numpy; from numpy.core import *; print(f'NumPy {numpy.__version__} with core loaded successfully')"
