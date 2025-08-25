@@ -100,8 +100,8 @@ services:
       dockerfile: nginx/Dockerfile
     container_name: okypbot_nginx
     ports:
-      - "80:80"
-      - "443:443"  # для HTTPS в будущем
+      - "8080:80"  # меняем внешний порт на 8080
+      - "8443:443"  # меняем внешний порт на 8443
     volumes:
       - nginx_logs:/var/log/nginx
     depends_on:
