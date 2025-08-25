@@ -21,12 +21,20 @@ class MLStatsService:
     
     def save_classification(self, text: str, predicted_category: str, 
                                 confidence: float, user_id: int, telegram_user_id: int,
-                                processing_time: float = None) -> int:
+                                processing_time: float = None) -> Optional[int]:
         """Сохраняет результат классификации в БД"""
         from config.db_config import SessionLocal
+        from database.models import User
+        
         session = SessionLocal()
         
         try:
+            # Проверяем существование пользователя
+            user = session.query(User).filter_by(telegram_id=telegram_user_id).first()
+            if not user:
+                logger.warning(f"Пользователь с telegram_id={telegram_user_id} не найден")
+                return None
+                
             # Сохраняем основную классификацию
             classification = Classification(
                 text=text,
