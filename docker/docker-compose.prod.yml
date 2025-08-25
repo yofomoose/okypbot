@@ -12,9 +12,6 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - postgres_backup:/var/lib/postgresql/backup
-      # Кастомная конфигурация PostgreSQL для производительности
-      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
-      - ./postgres/pg_hba.conf:/etc/postgresql/pg_hba.conf:ro
     ports:
       - "5433:5432"
     restart: unless-stopped
@@ -34,8 +31,7 @@ services:
         reservations:
           memory: 512M
           cpus: '0.5'
-    # Простая команда без установки cron (бэкапы лучше делать внешним инструментом)
-    command: ["postgres", "-c", "config_file=/etc/postgresql/postgresql.conf"]
+    # Используем стандартную конфигурацию PostgreSQL
 
   # Telegram бот + Webhook сервер
   bot:
@@ -132,16 +128,8 @@ services:
 volumes:
   postgres_data:
     driver: local
-    driver_opts:
-      type: none
-      o: bind
-      device: /opt/okypbot/postgres-data
   postgres_backup:
     driver: local
-    driver_opts:
-      type: none  
-      o: bind
-      device: /opt/okypbot/backups
   ml_backups:
     driver: local
   ml_cache:
