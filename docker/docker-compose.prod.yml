@@ -62,25 +62,12 @@ services:
       - PIP_NO_CACHE_DIR=1
       - PIP_DISABLE_PIP_VERSION_CHECK=1
     volumes:
-      - type: bind
-        source: ${PWD}/ml
-        target: /app/ml
-      - type: bind
-        source: ${PWD}/bot_model
-        target: /app/bot_model
-        read_only: true
-      - type: volume
-        source: ml_backups
-        target: /app/ml/models/backups
-      - type: volume
-        source: ml_cache
-        target: /app/ml/models/cache
-      - type: volume
-        source: bot_logs
-        target: /app/logs
-      - type: volume
-        source: bot_data
-        target: /app/data
+      - ./ml:/app/ml:rw
+      - ./bot_model:/app/bot_model:ro
+      - ml_backups:/app/ml/models/backups
+      - ml_cache:/app/ml/models/cache
+      - bot_logs:/app/logs
+      - bot_data:/app/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -140,19 +127,12 @@ services:
 
 volumes:
   postgres_data:
-    driver: local
   postgres_backup:
-    driver: local
   ml_backups:
-    driver: local
   ml_cache:
-    driver: local
   bot_logs:
-    driver: local
   bot_data:
-    driver: local
   nginx_logs:
-    driver: local
 
 networks:
   okypbot-net:

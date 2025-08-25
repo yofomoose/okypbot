@@ -70,8 +70,15 @@ RUN mkdir -p /app/data \
 
 WORKDIR /app
 
-# Определяем тома
-VOLUME ["/app/ml", "/app/bot_model", "/app/ml/models/backups", "/app/ml/models/cache", "/app/logs", "/app/data"]
+# Создаем структуру директорий
+RUN mkdir -p /app/ml \
+    /app/bot_model \
+    /app/ml/models/backups \
+    /app/ml/models/cache \
+    /app/logs \
+    /app/data \
+    && chown -R app:app /app \
+    && chmod -R 755 /app
 
 # Копируем код приложения
 COPY --chown=app:app . .
