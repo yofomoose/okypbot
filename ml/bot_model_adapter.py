@@ -4,6 +4,7 @@
 
 import json
 import numpy as np
+import numpy.core._multiarray_umath  # Важный импорт для работы с сохраненными моделями
 import logging
 import gc
 from pathlib import Path
@@ -39,6 +40,17 @@ class BotModelAdapter:
         logger.info("Загрузка модели из bot_model...")
         
         try:
+            # Инициализируем numpy и его компоненты
+            try:
+                import numpy
+                numpy.core._multiarray_umath
+                import numpy._core
+                import numpy._core.multiarray
+                logger.info(f"Numpy и его компоненты успешно инициализированы: {numpy.__version__}")
+            except ImportError as e:
+                logger.error(f"Ошибка инициализации numpy: {e}")
+                return False
+                
             # Проверяем наличие всех файлов
             required_files = [self.classifier_path, self.encoder_path, self.metadata_path]
             for file_path in required_files:
