@@ -62,9 +62,9 @@ services:
       PIP_NO_CACHE_DIR: 1
       PIP_DISABLE_PIP_VERSION_CHECK: 1
       PYTHONPATH: /app
+    command: python main.py
     volumes:
-      - ml_backups:/app/ml/models/backups
-      - ml_cache:/app/ml/models/cache
+      - ml_data:/app/ml
       - bot_logs:/app/logs
       - bot_data:/app/data
     depends_on:
@@ -113,8 +113,7 @@ services:
 volumes:
   postgres_data:
   postgres_backup:
-  ml_backups:
-  ml_cache:
+  ml_data:
   bot_logs:
   bot_data:
   nginx_logs:
