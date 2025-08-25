@@ -95,22 +95,6 @@ class BotModelAdapter:
             logger.error(f"Traceback: {traceback.format_exc()}")
             self.is_loaded = False
             return False
-                
-                # Загружаем метаданные
-                with open(self.metadata_path, 'r', encoding='utf-8') as f:
-                    self.metadata = json.load(f)
-                logger.info(f"Метаданные загружены: {self.metadata.get('model_type', 'Unknown')}")
-                
-                self.is_loaded = True
-                logger.info("✅ Модель bot_model успешно загружена")
-                return True
-                
-            except Exception as e:
-                logger.error(f"Ошибка загрузки модели: {e}")
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                self.is_loaded = False
-                return False
     
     def predict(self, features: np.ndarray) -> Tuple[str, float]:
         """
