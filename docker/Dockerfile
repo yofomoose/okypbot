@@ -32,12 +32,13 @@ COPY requirements.txt .
 
 # Устанавливаем зависимости в несколько этапов для лучшего кэширования
 RUN pip install --no-cache-dir wheel setuptools && \
-    pip install --no-cache-dir "numpy==1.24.3" && \
+    pip install --no-cache-dir pip --upgrade && \
+    pip install --no-cache-dir "numpy>=1.24.3" && \
     pip install --no-cache-dir \
-        "scipy==1.11.2" \
-        "scikit-learn==1.3.0" && \
+        "scipy>=1.11.2" \
+        "scikit-learn>=1.3.0" && \
     pip install --no-cache-dir \
-        "torch==2.0.1" --index-url https://download.pytorch.org/whl/cpu && \
+        "torch>=2.0.1" --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir \
         "transformers==4.31.0" \
         "sentence-transformers==2.2.2" \
