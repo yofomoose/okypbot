@@ -58,12 +58,22 @@ class BotModelAdapter:
                     return False
 
                 # Загружаем классификатор с безопасным режимом pickle
+                import sys
+                sys.modules['numpy._core'] = np.core  # Хак для обратной совместимости
+                
                 with open(self.classifier_path, 'rb') as f:
                     import pickle
                     raw_bytes = f.read()
                     logger.info(f"Размер файла модели: {len(raw_bytes)} байт")
                     f.seek(0)
-                    self.classifier = pickle.load(f, encoding='latin1')
+                    try:
+                        self.classifier = pickle.load(f, encoding='latin1')
+                    except ModuleNotFoundError as e:
+                        if 'numpy._core' in str(e):
+                            logger.warning("Пробуем альтернативный метод загрузки модели...")
+                            # Пробуем загрузить с другим форматом
+                            f.seek(0)
+                            self.classifier = pickle.load(f, encoding='bytes')
                 logger.info(f"Классификатор загружен: {type(self.classifier).__name__}")
                 
                 # Загружаем энкодер меток с безопасным режимом pickle
