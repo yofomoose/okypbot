@@ -42,11 +42,8 @@ services:
     build: 
       context: ..
       dockerfile: docker/Dockerfile
-      # Кэширование слоев
-      cache_from:
-        - ${DOCKER_REGISTRY:-}okypbot:latest
       target: production  # multi-stage build
-    image: ${DOCKER_REGISTRY:-}okypbot:${VERSION:-latest}
+    image: okypbot:${VERSION:-latest}
     container_name: okypbot_app
     environment:
       - BOT_TOKEN=${BOT_TOKEN}
