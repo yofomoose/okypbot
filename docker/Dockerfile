@@ -101,3 +101,6 @@ USER app
 
 # Проверяем установку перед запуском
 RUN python -c "import numpy; from numpy.core import *; print('NumPy core loaded successfully')"
+
+# Команда запуска приложения
+CMD ["python", "main.py"]
