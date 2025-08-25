@@ -1,7 +1,27 @@
 # Базовый образ
-FROM python:3.11-slim AS base
+FROM python:3.11-slim AS bas 
+# Удаляем старые установки и кэш
+RUN pip uninstall -y numpy scikit-learn scipy || true
+RUN pip cache purge || true
 
-# Установка переменных окружения
+# Устанавливаем build-essential для компиляции
+RUN apt-get update && apt-get install -y build-essential
+
+# Устанавливаем numpy с полными зависимостями
+RUN pip install --no-cache-dir --verbose numpy==1.26.3 && \
+    pip install --no-cache-dir --verbose numpy==1.26.3 && \
+    python -c "import numpy; print(f'NumPy version: {numpy.__version__}')" && \
+    python -m pip install --force-reinstall --no-binary :all: numpy==1.26.3
+
+# Устанавливаем остальные зависимости
+RUN pip install --no-cache-dir \
+    "scikit-learn==1.7.1" \
+    "scipy>=1.11.0" \
+    "cython>=0.29.0"
+
+# Проверяем установку
+RUN python -c "import numpy; from numpy.core import *; print('NumPy core modules:', dir())" && \
+    python -c "import numpy, sklearn; print(f'NumPy: {numpy.__version__}, scikit-learn: {sklearn.__version__}')"овка переменных окружения
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONPATH=/app \
@@ -100,6 +120,43 @@ COPY --chown=app:app . .
 RUN ls -la /app/bot_model/ || true && \
     chown -R app:app /app/bot_model && \
     chmod -R 755 /app/bot_model
+
+# Добавляем отладочный скрипт
+COPY --chown=app:app <<EOF /app/debug_model.py
+import pickle
+import numpy as np
+import sys
+import os
+
+def debug_model():
+    try:
+        print(f"Python version: {sys.version}")
+        print(f"NumPy version: {np.__version__}")
+        
+        model_path = "/app/bot_model/classifier.pkl"
+        print(f"\nПроверка файла модели:")
+        print(f"Существует: {os.path.exists(model_path)}")
+        if os.path.exists(model_path):
+            print(f"Размер: {os.path.getsize(model_path)} байт")
+            print(f"Права доступа: {oct(os.stat(model_path).st_mode)[-3:]}")
+            
+            print("\nЗагрузка модели...")
+            with open(model_path, 'rb') as f:
+                model = pickle.load(f)
+            print(f"Тип модели: {type(model)}")
+            print(f"Атрибуты модели: {dir(model)}")
+            
+    except Exception as e:
+        print(f"Ошибка при отладке: {str(e)}")
+        import traceback
+        print(traceback.format_exc())
+
+if __name__ == "__main__":
+    debug_model()
+EOF
+
+# Запускаем отладку при старте контейнера
+RUN python /app/debug_model.py || true
 
 USER app
 
