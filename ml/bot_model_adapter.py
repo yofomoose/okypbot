@@ -39,15 +39,30 @@ class BotModelAdapter:
                     logger.error(f"Не найден файл: {file_path}")
                     return False
             
-            # Загружаем классификатор
-            with open(self.classifier_path, 'rb') as f:
-                self.classifier = pickle.load(f)
-            logger.info(f"Классификатор загружен: {type(self.classifier).__name__}")
+            # Проверяем, что numpy доступен
+            try:
+                import numpy as np
+                logger.info(f"Numpy версия: {np.__version__}")
+            except ImportError as e:
+                logger.error(f"Ошибка импорта numpy: {e}")
+                return False
             
-            # Загружаем энкодер меток
-            with open(self.encoder_path, 'rb') as f:
-                self.label_encoder = pickle.load(f)
-            logger.info(f"Энкодер загружен, классов: {len(self.label_encoder.classes_)}")
+            try:
+                # Загружаем классификатор с безопасным режимом pickle
+                with open(self.classifier_path, 'rb') as f:
+                    import pickle
+                    self.classifier = pickle.load(f, encoding='latin1')
+                logger.info(f"Классификатор загружен: {type(self.classifier).__name__}")
+                
+                # Загружаем энкодер меток с безопасным режимом pickle
+                with open(self.encoder_path, 'rb') as f:
+                    self.label_encoder = pickle.load(f, encoding='latin1')
+                logger.info(f"Энкодер загружен, классов: {len(self.label_encoder.classes_)}")
+            except Exception as e:
+                logger.error(f"Ошибка загрузки модели: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                return False
             
             # Загружаем метаданные
             with open(self.metadata_path, 'r', encoding='utf-8') as f:
