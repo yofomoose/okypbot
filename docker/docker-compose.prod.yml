@@ -63,7 +63,6 @@ services:
       PIP_DISABLE_PIP_VERSION_CHECK: 1
       PYTHONPATH: /app
     volumes:
-      - ./bot_model:/app/bot_model:ro
       - ml_backups:/app/ml/models/backups
       - ml_cache:/app/ml/models/cache
       - bot_logs:/app/logs

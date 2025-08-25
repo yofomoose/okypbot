@@ -81,15 +81,23 @@ RUN mkdir -p /app/ml \
     && chown -R app:app /app \
     && chmod -R 755 /app
 
+# Создаем нужные директории
+RUN mkdir -p /app/bot_model
+
 # Копируем код приложения
 COPY --chown=app:app . .
 
-# Проверяем и создаем директорию для моделей
-RUN ls -la /app/bot_model || mkdir -p /app/bot_model
+# Проверяем наличие файлов модели и копируем их отдельно
+RUN echo "Содержимое /app/bot_model до копирования:" && \
+    ls -la /app/bot_model/ || true && \
+    echo "Копируем файлы модели..." && \
+    cp -v /app/bot_model/*.pkl /app/bot_model/*.json /app/bot_model/ 2>/dev/null || true && \
+    echo "Содержимое /app/bot_model после копирования:" && \
+    ls -la /app/bot_model/
 
-# Копируем модель отдельно и проверяем
-COPY --chown=app:app bot_model/*.pkl bot_model/*.json /app/bot_model/
-RUN ls -la /app/bot_model/
+# Проверяем права доступа
+RUN chown -R app:app /app/bot_model && \
+    chmod -R 755 /app/bot_model
 
 USER app
 
