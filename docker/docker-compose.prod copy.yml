@@ -108,8 +108,9 @@ services:
       - "80:80"
       - "443:443"  # для HTTPS в будущем
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./nginx/conf.d:/etc/nginx/conf.d:ro
+      - ../nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ../nginx/okypbot_locations.conf:/etc/nginx/conf.d/okypbot_locations.conf:ro
       - nginx_logs:/var/log/nginx
     depends_on:
       bot:
