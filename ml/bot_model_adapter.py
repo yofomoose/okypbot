@@ -36,71 +36,49 @@ class BotModelAdapter:
         
     def load_model(self) -> bool:
         """Загружает модель и все компоненты"""
+        logger.info("Загрузка модели из bot_model...")
+        
         try:
-            logger.info("Загрузка модели из bot_model...")
-            
             # Проверяем наличие всех файлов
             required_files = [self.classifier_path, self.encoder_path, self.metadata_path]
             for file_path in required_files:
                 if not file_path.exists():
                     logger.error(f"Не найден файл: {file_path}")
                     return False
-            
-            # Проверяем, что numpy доступен
+                    
+            # Проверяем зависимости
             try:
                 import numpy as np
+                import numpy.core.numeric
+                import numpy.core.multiarray
+                import sklearn
+                import sys
+                
                 logger.info(f"Numpy версия: {np.__version__}")
+                logger.info(f"Python версия: {sys.version}")
+                logger.info(f"Scikit-learn версия: {sklearn.__version__}")
+                logger.info("Все зависимости успешно импортированы")
             except ImportError as e:
-                logger.error(f"Ошибка импорта numpy: {e}")
+                logger.error(f"Ошибка импорта зависимостей: {e}")
                 return False
+                
+            # Проверяем файлы моделей
+            logger.info(f"Размер classifier: {Path(self.classifier_path).stat().st_size} байт")
+            logger.info(f"Размер encoder: {Path(self.encoder_path).stat().st_size} байт")
             
-            try:
-                # Проверяем numpy.core
-                try:
-                    import numpy.core.numeric
-                    import numpy.core.multiarray
-                    logger.info("numpy.core компоненты успешно импортированы")
-                except ImportError as e:
-                    logger.error(f"Ошибка импорта numpy.core: {e}")
-                    return False
-
-                # Используем безопасный загрузчик моделей
-                from .model_loader import safe_load_model
-                
-                # Загружаем классификатор
-                logger.info("Загрузка классификатора...")
-                filesize = Path(self.classifier_path).stat().st_size
-                logger.info(f"Размер файла модели: {filesize} байт")
-                
-                try:
-                    # Используем ленивую загрузку для классификатора
-                    logger.info("Загрузка классификатора через LazyModelLoader...")
-                    classifier_loader = LazyModelLoader(str(self.classifier_path))
-                    self.classifier = classifier_loader.load()
-                    logger.info(f"Классификатор загружен: {type(self.classifier).__name__}")
-                    
-                    # Очищаем память после загрузки классификатора
-                    gc.collect()
-                    
-                    # Загружаем энкодер
-                    logger.info("Загрузка label encoder...")
-                    encoder_loader = LazyModelLoader(str(self.encoder_path))
-                    self.label_encoder = encoder_loader.load()
-                    logger.info(f"Энкодер загружен, классов: {len(self.label_encoder.classes_)}")
-                    
-                    # Очищаем память после загрузки энкодера
-                    gc.collect()
-                    
-                except Exception as e:
-                    logger.error(f"Ошибка при загрузке модели: {str(e)}")
-                    import traceback
-                    logger.error(f"Traceback: {traceback.format_exc()}")
-                    return False
-            except Exception as e:
-                logger.error(f"Ошибка загрузки модели: {e}")
-                import traceback
-                logger.error(f"Traceback: {traceback.format_exc()}")
-                return False
+            # Загружаем классификатор
+            logger.info("Загрузка классификатора через LazyModelLoader...")
+            classifier_loader = LazyModelLoader(str(self.classifier_path))
+            self.classifier = classifier_loader.load()
+            logger.info(f"Классификатор загружен: {type(self.classifier).__name__}")
+            gc.collect()
+            
+            # Загружаем энкодер
+            logger.info("Загрузка label encoder...")
+            encoder_loader = LazyModelLoader(str(self.encoder_path))
+            self.label_encoder = encoder_loader.load()
+            logger.info(f"Энкодер загружен, классов: {len(self.label_encoder.classes_)}")
+            gc.collect()
             
             # Загружаем метаданные
             with open(self.metadata_path, 'r', encoding='utf-8') as f:
@@ -112,9 +90,27 @@ class BotModelAdapter:
             return True
             
         except Exception as e:
-            logger.error(f"Ошибка загрузки модели bot_model: {e}")
+            logger.error(f"Ошибка загрузки модели: {e}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             self.is_loaded = False
             return False
+                
+                # Загружаем метаданные
+                with open(self.metadata_path, 'r', encoding='utf-8') as f:
+                    self.metadata = json.load(f)
+                logger.info(f"Метаданные загружены: {self.metadata.get('model_type', 'Unknown')}")
+                
+                self.is_loaded = True
+                logger.info("✅ Модель bot_model успешно загружена")
+                return True
+                
+            except Exception as e:
+                logger.error(f"Ошибка загрузки модели: {e}")
+                import traceback
+                logger.error(f"Traceback: {traceback.format_exc()}")
+                self.is_loaded = False
+                return False
     
     def predict(self, features: np.ndarray) -> Tuple[str, float]:
         """
