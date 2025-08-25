@@ -23,8 +23,14 @@ class BotModelAdapter:
         self.is_loaded = False
         
         # Пути к файлам модели
-        self.classifier_path = self.model_dir / "classifier.pkl"
-        self.encoder_path = self.model_dir / "label_encoder.pkl"
+        self.classifier_path = self.model_dir / "classifier.joblib"
+        if not self.classifier_path.exists():
+            self.classifier_path = self.model_dir / "classifier.pkl"
+            
+        self.encoder_path = self.model_dir / "label_encoder.joblib"
+        if not self.encoder_path.exists():
+            self.encoder_path = self.model_dir / "label_encoder.pkl"
+            
         self.metadata_path = self.model_dir / "model_metadata.json"
         
     def load_model(self) -> bool:
@@ -65,20 +71,38 @@ class BotModelAdapter:
                 filesize = Path(self.classifier_path).stat().st_size
                 logger.info(f"Размер файла модели: {filesize} байт")
                 
-                # Загружаем модель через безопасный загрузчик
-                self.classifier = safe_load_model(str(self.classifier_path))
-                if self.classifier is None:
-                    logger.error("Не удалось загрузить классификатор")
+                try:
+                    # Пробуем загрузить через joblib с memory mapping
+                    import joblib
+                    if str(self.classifier_path).endswith('.joblib'):
+                        self.classifier = joblib.load(str(self.classifier_path), mmap_mode='r')
+                    else:
+                        # Конвертируем модель если она в формате pickle
+                        logger.info("Конвертация модели из pickle в joblib...")
+                        with open(self.classifier_path, 'rb') as f:
+                            temp_classifier = pickle.load(f, encoding='latin1')
+                        joblib.dump(temp_classifier, str(self.classifier_path).replace('.pkl', '.joblib'), compress=3)
+                        self.classifier = joblib.load(str(self.classifier_path).replace('.pkl', '.joblib'), mmap_mode='r')
+                    
+                    logger.info(f"Классификатор загружен: {type(self.classifier).__name__}")
+                    
+                    # Аналогично для энкодера
+                    logger.info("Загрузка label encoder...")
+                    if str(self.encoder_path).endswith('.joblib'):
+                        self.label_encoder = joblib.load(str(self.encoder_path))
+                    else:
+                        with open(self.encoder_path, 'rb') as f:
+                            self.label_encoder = pickle.load(f, encoding='latin1')
+                            joblib.dump(self.label_encoder, str(self.encoder_path).replace('.pkl', '.joblib'), compress=3)
+                            self.label_encoder = joblib.load(str(self.encoder_path).replace('.pkl', '.joblib'))
+                    
+                    logger.info(f"Энкодер загружен, классов: {len(self.label_encoder.classes_)}")
+                    
+                except Exception as e:
+                    logger.error(f"Ошибка при загрузке модели: {str(e)}")
+                    import traceback
+                    logger.error(f"Traceback: {traceback.format_exc()}")
                     return False
-                logger.info(f"Классификатор загружен: {type(self.classifier).__name__}")
-                
-                # Загружаем энкодер меток также через безопасный загрузчик
-                logger.info("Загрузка label encoder...")
-                self.label_encoder = safe_load_model(str(self.encoder_path))
-                if self.label_encoder is None:
-                    logger.error("Не удалось загрузить label encoder")
-                    return False
-                logger.info(f"Энкодер загружен, классов: {len(self.label_encoder.classes_)}")
             except Exception as e:
                 logger.error(f"Ошибка загрузки модели: {e}")
                 import traceback
