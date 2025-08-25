@@ -1,5 +1,5 @@
 # Multi-stage build для оптимизации размера образа
-FROM python:3.11-slim as base
+FROM python:3.11-slim AS base
 
 # Устанавливаем переменные окружения
 ENV PYTHONUNBUFFERED=1 \
@@ -17,7 +17,7 @@ RUN groupadd --gid 1000 app && \
 # =============================================================================
 # STAGE: Dependencies installation
 # =============================================================================
-FROM base as deps
+FROM base AS deps
 
 # Устанавливаем системные зависимости в одном слое
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -61,7 +61,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 # =============================================================================  
 # STAGE: Development (опционально)
 # =============================================================================
-FROM deps as development
+FROM deps AS development
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     vim \
@@ -75,7 +75,7 @@ WORKDIR /app
 # =============================================================================
 # STAGE: Production
 # =============================================================================
-FROM base as production
+FROM base AS production
 
 # Копируем установленные пакеты из stage deps
 COPY --from=deps /usr/local/lib/python3.11/site-packages/ /usr/local/lib/python3.11/site-packages/
@@ -99,31 +99,12 @@ RUN mkdir -p /app/data \
     && chown -R app:app /app \
     && chmod -R 755 /app
 
-# Устанавливаем переменные окружения для оптимизации
-ENV PYTHONPATH=/app \
-    OPENBLAS_NUM_THREADS=1 \
-    MKL_NUM_THREADS=1 \
-    OMP_NUM_THREADS=1 \
-    TOKENIZERS_PARALLELISM=false
+# Копируем код приложения
+COPY --chown=app:app . /app/
 
 # Переключаемся на пользователя app
 USER app
 WORKDIR /app
 
-# Копируем код приложения (исключаем ненужные файлы через .dockerignore)
-COPY --chown=app:app . .
-
-# Проверяем что все зависимости установлены
-RUN python -c "import torch, lightgbm, transformers, sentence_transformers; print('All ML dependencies OK')"
-
-# Проверяем права на запись в рабочие директории
-RUN touch ml/models/.write_test && rm ml/models/.write_test
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health', timeout=5)" || exit 1
-
-EXPOSE 8000
-
-# Используем exec форму для правильной обработки сигналов
+# Запускаем бот
 CMD ["python", "main.py"]
