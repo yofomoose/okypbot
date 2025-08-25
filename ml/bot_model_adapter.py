@@ -61,15 +61,23 @@ class BotModelAdapter:
                 from .model_loader import safe_load_model
                 
                 # Загружаем классификатор
+                logger.info("Загрузка классификатора...")
+                filesize = Path(self.classifier_path).stat().st_size
+                logger.info(f"Размер файла модели: {filesize} байт")
+                
+                # Загружаем модель через безопасный загрузчик
                 self.classifier = safe_load_model(str(self.classifier_path))
                 if self.classifier is None:
                     logger.error("Не удалось загрузить классификатор")
                     return False
                 logger.info(f"Классификатор загружен: {type(self.classifier).__name__}")
                 
-                # Загружаем энкодер меток с безопасным режимом pickle
-                with open(self.encoder_path, 'rb') as f:
-                    self.label_encoder = pickle.load(f, encoding='latin1')
+                # Загружаем энкодер меток также через безопасный загрузчик
+                logger.info("Загрузка label encoder...")
+                self.label_encoder = safe_load_model(str(self.encoder_path))
+                if self.label_encoder is None:
+                    logger.error("Не удалось загрузить label encoder")
+                    return False
                 logger.info(f"Энкодер загружен, классов: {len(self.label_encoder.classes_)}")
             except Exception as e:
                 logger.error(f"Ошибка загрузки модели: {e}")
