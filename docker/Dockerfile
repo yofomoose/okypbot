@@ -40,11 +40,14 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 # Копируем и устанавливаем requirements.txt
 COPY requirements.txt .
 
-# Устанавливаем ML зависимости отдельно для лучшего кэширования
+# Устанавливаем базовые ML зависимости
 RUN pip install --no-cache-dir \
     "numpy>=1.24.3" \
     "scipy>=1.11.2" \
-    "scikit-learn>=1.3.0" \
+    "scikit-learn>=1.3.0"
+
+# Устанавливаем PyTorch отдельно
+RUN pip install --no-cache-dir \
     "torch>=2.0.1" --index-url https://download.pytorch.org/whl/cpu
 
 # Устанавливаем остальные зависимости
