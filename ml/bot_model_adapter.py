@@ -11,10 +11,19 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime
 
+# Пробуем импортировать все необходимые компоненты numpy
 try:
     import numpy as np
-except ImportError:
-    np = None  # Будет проверено при инициализации в load_model
+    import numpy.core
+    from numpy.core import multiarray
+    from numpy.core import numeric
+    from numpy.core._multiarray_umath import *
+    from numpy.core import _multiarray_umath
+    np._core = numpy.core  # Важный хак для поддержки pickle
+    logging.info(f"NumPy {np.__version__} инициализирован со всеми компонентами")
+except ImportError as e:
+    logging.error(f"Ошибка инициализации NumPy: {e}")
+    np = None
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 from .lazy_model_loader import LazyModelLoader
@@ -48,32 +57,40 @@ class BotModelAdapter:
         logger.info("Загрузка модели из bot_model...")
         
         try:
-            # Импортируем необходимые пакеты внутри блока try
+            # Проверяем numpy и системные зависимости
             try:
-                import numpy as np
-                import sys
-                import numpy.core.multiarray
-                import numpy.core.numeric
-                from numpy.core import numeric
-                from numpy.core import multiarray
-                
+                # Проверка базовых компонентов numpy
+                if np is None or not hasattr(np, '_core'):
+                    raise ImportError("NumPy не инициализирован или отсутствуют критические компоненты")
+
                 # Проверка версии numpy
                 np_version = tuple(map(int, np.__version__.split('.')))
                 min_version = (1, 19, 0)
                 if np_version < min_version:
                     raise ImportError(f"Требуется numpy >= {'.'.join(map(str, min_version))}, установлено {np.__version__}")
                 
-                # Проверка критических компонентов
-                np.zeros(1, dtype=np.float64)  # Проверка базовых операций
-                np.array([1, 2, 3])  # Проверка создания массива
+                # Проверка критических компонентов и операций
+                try:
+                    import numpy.core._multiarray_umath
+                    np.zeros(1, dtype=np.float64)  # Проверка базовых операций
+                    np.array([1, 2, 3])  # Проверка создания массива
+                    # Проверяем доступность всех необходимых модулей
+                    from numpy.core import multiarray
+                    from numpy.core import numeric
+                    import numpy.core._multiarray_umath as umath
+                    
+                    # Устанавливаем важные атрибуты для поддержки pickle
+                    if not hasattr(np, '_core'):
+                        np._core = numpy.core
+                except ImportError as e:
+                    raise ImportError(f"Отсутствует критический компонент numpy: {e}")
                 
-                logger.info(f"Numpy {np.__version__} успешно проверен")
+                logger.info(f"Numpy {np.__version__} успешно проверен со всеми компонентами")
                 
             except Exception as e:
                 logger.error(f"Ошибка проверки numpy: {e}")
-                if 'sys' in locals():
-                    logger.error(f"Системная информация: Python {sys.version}")
-                logger.error("Убедитесь, что numpy и системные библиотеки установлены корректно")
+                logger.error(f"Системная информация: Python {sys.version}")
+                logger.error("Убедитесь, что numpy и все его компоненты установлены корректно")
                 return False
                 
             # Проверяем наличие всех файлов
