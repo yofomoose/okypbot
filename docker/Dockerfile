@@ -38,9 +38,9 @@ RUN apt-get update && \
     gfortran \
     libblas-dev \
     liblapack-dev \
-    python3-numpy \
-    python3-numpy-dev \
-    python3-scipy \
+    libatlas-base-dev \
+    libopenblas-dev \
+    liblapack3 \
     libssl-dev \
     cmake \
     && rm -rf /var/lib/apt/lists/*
