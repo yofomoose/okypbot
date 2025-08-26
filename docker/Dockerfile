@@ -17,6 +17,13 @@ RUN groupadd --gid 1000 app && \
 # Установка зависимостей
 FROM base AS builder
 
+# Устанавливаем переменные окружения для NumPy
+ENV OPENBLAS_NUM_THREADS=1 \
+    MKL_NUM_THREADS=1 \
+    NUMEXPR_NUM_THREADS=1 \
+    OMP_NUM_THREADS=1 \
+    NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=0
+
 WORKDIR /build
 
 # Установка системных зависимостей
@@ -45,8 +52,17 @@ ENV PATH="/opt/venv/bin:$PATH"
 # Устанавливаем базовые инструменты
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 
-# Копируем requirements.txt
+# Копируем requirements.txt и устанавливаем numpy отдельно
 COPY requirements.txt .
+
+# Устанавливаем numpy с полными зависимостями
+RUN pip install --no-cache-dir numpy==1.24.3
+
+# Проверяем установку numpy
+RUN python -c "import numpy; import numpy.core._multiarray_umath; import numpy._core; print('NumPy установлен успешно:', numpy.__version__)"
+
+# Устанавливаем остальные зависимости
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Устанавливаем зависимости для numpy и ML компонентов
 # Устанавливаем numpy отдельно
