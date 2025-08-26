@@ -5,17 +5,26 @@
 import json
 import logging
 import gc
-import numpy as np
+import sys
+import traceback
+from pathlib import Path
+from typing import Dict, List, Tuple, Optional, Any
+from datetime import datetime
 
-# Явно импортируем необходимые компоненты numpy
+# Инициализация numpy с проверкой системных зависимостей
 try:
-    import numpy._core
-    import numpy.core.multiarray
-    import numpy.core._multiarray_umath
-    import numpy.core.numeric
+    import numpy as np
+    from numpy.core import numeric
+    from numpy.core import multiarray
+    # Проверяем наличие критических компонентов
+    required_attrs = ['ndarray', 'dtype', 'float64', 'int64']
+    missing_attrs = [attr for attr in required_attrs if not hasattr(np, attr)]
+    if missing_attrs:
+        raise ImportError(f"Missing required NumPy attributes: {', '.join(missing_attrs)}")
+    logging.info(f"NumPy {np.__version__} initialized successfully")
 except ImportError as e:
-    logging.error(f"Ошибка импорта компонентов numpy: {e}")
-    # Продолжаем выполнение, error handling происходит в load_model
+    logging.error(f"NumPy initialization error: {e}")
+    logging.error("Make sure NumPy and its dependencies are properly installed")
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 from .lazy_model_loader import LazyModelLoader
@@ -49,24 +58,24 @@ class BotModelAdapter:
         logger.info("Загрузка модели из bot_model...")
         
         try:
-            # Проверяем и инициализируем numpy и его компоненты
+            # Проверяем numpy и системные зависимости
             try:
-                import numpy as np
-                import numpy._core
-                import numpy.core.multiarray
-                import numpy.core._multiarray_umath
-                import numpy.core.numeric
-                logger.info(f"Numpy и его компоненты успешно инициализированы: {np.__version__}")
+                # Проверка версии numpy
+                np_version = tuple(map(int, np.__version__.split('.')))
+                min_version = (1, 19, 0)
+                if np_version < min_version:
+                    raise ImportError(f"Требуется numpy >= {'.'.join(map(str, min_version))}, установлено {np.__version__}")
                 
-                # Проверяем наличие критических компонентов
-                required_attrs = ['ndarray', '_multiarray_umath', 'core']
-                for attr in required_attrs:
-                    if not hasattr(np, attr):
-                        raise ImportError(f"Отсутствует критический компонент numpy: {attr}")
-                        
-            except ImportError as e:
-                logger.error(f"Ошибка инициализации numpy: {e}")
-                logger.error("Убедитесь, что numpy установлен корректно и все системные зависимости присутствуют")
+                # Проверка критических компонентов
+                np.zeros(1, dtype=np.float64)  # Проверка базовых операций
+                np.array([1, 2, 3])  # Проверка создания массива
+                
+                logger.info(f"Numpy {np.__version__} успешно проверен")
+                
+            except Exception as e:
+                logger.error(f"Ошибка проверки numpy: {e}")
+                logger.error(f"Системная информация: Python {sys.version}")
+                logger.error("Убедитесь, что numpy и системные библиотеки установлены корректно")
                 return False
                 
             # Проверяем наличие всех файлов
