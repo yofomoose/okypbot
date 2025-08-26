@@ -55,26 +55,26 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 # Копируем requirements.txt и устанавливаем numpy отдельно
 COPY requirements.txt .
 
-# Устанавливаем numpy с полными зависимостями
-RUN pip install --no-cache-dir numpy==1.24.3
+# Настройка переменных окружения для сборки numpy
+ENV NPY_NUM_BUILD_JOBS=4 \
+    NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=0 \
+    OPENBLAS_NUM_THREADS=1
 
-# Проверяем установку numpy
-RUN python -c "import numpy; import numpy.core._multiarray_umath; import numpy._core; print('NumPy установлен успешно:', numpy.__version__)"
+# Устанавливаем numpy из исходников
+RUN pip install --no-cache-dir numpy==1.24.3 --no-binary numpy && \
+    python -m pip install --upgrade pip && \
+    python -c "import numpy; from numpy.core import numeric, multiarray; print('NumPy установлен успешно:', numpy.__version__)"
 
 # Устанавливаем остальные зависимости
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Устанавливаем зависимости для numpy и ML компонентов
-# Устанавливаем numpy отдельно
-RUN pip install --no-cache-dir "numpy==1.24.3" && \
-    python -c "import numpy; print(f'NumPy {numpy.__version__} installed successfully')" && \
-    python -c "from numpy.core import *; print('NumPy core loaded successfully')"
-
-# Устанавливаем остальные ML зависимости
+# Проверяем полную установку numpy и его компонентов
+# Устанавливаем ML зависимости
 RUN pip install --no-cache-dir \
     "scikit-learn==1.3.0" \
     "scipy==1.11.2" \
-    "cython>=0.29.0"
+    "cython>=0.29.0" && \
+    python -c "import numpy, scipy, sklearn; print(f'NumPy {numpy.__version__}, SciPy {scipy.__version__}, Scikit-learn {sklearn.__version__} installed successfully')"
 
 # Устанавливаем PyTorch CPU версию
 RUN pip install --no-cache-dir torch==2.0.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
