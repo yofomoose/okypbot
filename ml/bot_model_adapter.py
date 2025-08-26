@@ -11,20 +11,10 @@ from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 from datetime import datetime
 
-# Инициализация numpy с проверкой системных зависимостей
 try:
     import numpy as np
-    from numpy.core import numeric
-    from numpy.core import multiarray
-    # Проверяем наличие критических компонентов
-    required_attrs = ['ndarray', 'dtype', 'float64', 'int64']
-    missing_attrs = [attr for attr in required_attrs if not hasattr(np, attr)]
-    if missing_attrs:
-        raise ImportError(f"Missing required NumPy attributes: {', '.join(missing_attrs)}")
-    logging.info(f"NumPy {np.__version__} initialized successfully")
-except ImportError as e:
-    logging.error(f"NumPy initialization error: {e}")
-    logging.error("Make sure NumPy and its dependencies are properly installed")
+except ImportError:
+    np = None  # Будет проверено при инициализации в load_model
 from pathlib import Path
 from typing import Dict, List, Tuple, Optional, Any
 from .lazy_model_loader import LazyModelLoader
@@ -58,8 +48,15 @@ class BotModelAdapter:
         logger.info("Загрузка модели из bot_model...")
         
         try:
-            # Проверяем numpy и системные зависимости
+            # Импортируем необходимые пакеты внутри блока try
             try:
+                import numpy as np
+                import sys
+                import numpy.core.multiarray
+                import numpy.core.numeric
+                from numpy.core import numeric
+                from numpy.core import multiarray
+                
                 # Проверка версии numpy
                 np_version = tuple(map(int, np.__version__.split('.')))
                 min_version = (1, 19, 0)
@@ -74,7 +71,8 @@ class BotModelAdapter:
                 
             except Exception as e:
                 logger.error(f"Ошибка проверки numpy: {e}")
-                logger.error(f"Системная информация: Python {sys.version}")
+                if 'sys' in locals():
+                    logger.error(f"Системная информация: Python {sys.version}")
                 logger.error("Убедитесь, что numpy и системные библиотеки установлены корректно")
                 return False
                 
@@ -85,20 +83,13 @@ class BotModelAdapter:
                     logger.error(f"Не найден файл: {file_path}")
                     return False
                     
-            # Проверяем зависимости
+            # Проверяем дополнительные зависимости
             try:
-                import numpy as np
-                import numpy.core.numeric
-                import numpy.core.multiarray
                 import sklearn
-                import sys
-                
-                logger.info(f"Numpy версия: {np.__version__}")
-                logger.info(f"Python версия: {sys.version}")
                 logger.info(f"Scikit-learn версия: {sklearn.__version__}")
                 logger.info("Все зависимости успешно импортированы")
             except ImportError as e:
-                logger.error(f"Ошибка импорта зависимостей: {e}")
+                logger.error(f"Ошибка импорта scikit-learn: {e}")
                 return False
                 
             # Проверяем файлы моделей
@@ -135,7 +126,7 @@ class BotModelAdapter:
             self.is_loaded = False
             return False
     
-    def predict(self, features: np.ndarray) -> Tuple[str, float]:
+    def predict(self, features: Any) -> Tuple[str, float]:
         """
         Выполняет предсказание категории
         
@@ -145,6 +136,8 @@ class BotModelAdapter:
         Returns:
             Tuple[str, float]: (категория, уверенность)
         """
+        if np is None:
+            raise RuntimeError("NumPy не инициализирован")
         if not self.is_loaded:
             raise ValueError("Модель не загружена")
         
