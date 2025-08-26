@@ -38,7 +38,6 @@ RUN apt-get update && \
     gfortran \
     libblas-dev \
     liblapack-dev \
-    libatlas-base-dev \
     libopenblas-dev \
     liblapack3 \
     libssl-dev \
