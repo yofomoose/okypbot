@@ -58,16 +58,20 @@ class LazyModelLoader:
 
         try:
             model_path = self.model_paths[model_name]
+
             logger.warning(f"Попытка загрузки файла: {model_path}")
             logger.info(f"Загружаем модель {model_name} из {model_path}")
-
-            if str(model_path).endswith('.pkl'):
+            ext = str(model_path).lower().split('.')[-1]
+            if ext == 'pkl':
                 logger.warning(f"Открываю файл для pickle.load: {model_path}")
                 with open(model_path, 'rb') as f:
                     model = pickle.load(f)
-            else:
+            elif ext == 'joblib':
                 logger.warning(f"Открываю файл для joblib.load: {model_path}")
                 model = joblib.load(model_path)
+            else:
+                logger.error(f"Файл {model_path} имеет неподдерживаемое расширение: .{ext}. Загрузка запрещена!")
+                raise ValueError(f"Неподдерживаемое расширение файла модели: .{ext}")
 
             self._loaded_models[model_name] = model
             logger.info(f"Модель {model_name} успешно загружена")
