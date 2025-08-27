@@ -122,6 +122,10 @@ RUN ls -la /app/bot_model/ || true && \
     chown -R app:app /app/bot_model && \
     chmod -R 755 /app/bot_model
 
+
+# Проверка наличия numpy в venv
+RUN /opt/venv/bin/pip show numpy
+
 USER app
 
 
