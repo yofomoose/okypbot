@@ -88,3 +88,15 @@ database/user_issues.json
 
 # Скрипты настройки (могут содержать чувствительные данные)
 scripts/setup_local.py
+scripts/model_resave/requirements_resave.txt
+venv-resave/pyvenv.cfg
+venv-resave/Scripts/activate
+venv-resave/Scripts/activate.bat
+venv-resave/Scripts/Activate.ps1
+venv-resave/Scripts/deactivate.bat
+venv-resave/Scripts/f2py.exe
+venv-resave/Scripts/pip.exe
+venv-resave/Scripts/pip3.11.exe
+venv-resave/Scripts/pip3.exe
+venv-resave/Scripts/python.exe
+venv-resave/Scripts/pythonw.exe

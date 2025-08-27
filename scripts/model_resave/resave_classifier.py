@@ -2,17 +2,17 @@ import joblib
 import os
 
 files = [
-    ('bot_model/classifier.pkl', 'bot_model/classifier.pkl'),
-    ('bot_model/label_encoder.pkl', 'bot_model/label_encoder.pkl'),
+    'bot_model/classifier.pkl',
+    'bot_model/label_encoder.pkl',
     # Добавьте другие файлы, если нужно
 ]
 
-for src, dst in files:
-    if not os.path.exists(src):
-        print(f'Файл не найден: {src}')
+for path in files:
+    if not os.path.exists(path):
+        print(f'Файл не найден: {path}')
         continue
-    print(f'Загрузка: {src}')
-    obj = joblib.load(src)
-    print(f'Сохраняем: {dst}')
-    joblib.dump(obj, dst)
-    print(f'OK: {dst}')
+    print(f'Загрузка: {path}')
+    obj = joblib.load(path)
+    print(f'Сохраняем: {path}')
+    joblib.dump(obj, path)
+    print(f'OK: {path}')
