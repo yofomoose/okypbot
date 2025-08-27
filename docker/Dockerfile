@@ -87,10 +87,15 @@ FROM base AS production
 # Копируем виртуальное окружение из builder
 COPY --from=builder /opt/venv /opt/venv
 
-# Установка минимальных системных зависимостей
+
+# Установка минимальных системных зависимостей для numpy/scipy
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     libgomp1 \
+    libopenblas0 \
+    libblas3 \
+    liblapack3 \
+    liblapack-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Создаем все нужные директории
