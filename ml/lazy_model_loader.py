@@ -52,26 +52,29 @@ class LazyModelLoader:
         if model_name not in self.model_paths:
             logger.error(f"Модель {model_name} не найдена в paths")
             return None
-            
+
         if model_name in self._loaded_models:
             return self._loaded_models[model_name]
-            
+
         try:
             model_path = self.model_paths[model_name]
+            logger.warning(f"Попытка загрузки файла: {model_path}")
             logger.info(f"Загружаем модель {model_name} из {model_path}")
-            
+
             if str(model_path).endswith('.pkl'):
+                logger.warning(f"Открываю файл для pickle.load: {model_path}")
                 with open(model_path, 'rb') as f:
                     model = pickle.load(f)
             else:
+                logger.warning(f"Открываю файл для joblib.load: {model_path}")
                 model = joblib.load(model_path)
-                
+
             self._loaded_models[model_name] = model
             logger.info(f"Модель {model_name} успешно загружена")
             return model
-            
+
         except Exception as e:
-            logger.error(f"Ошибка при загрузке модели {model_name}: {e}")
+            logger.error(f"Ошибка при загрузке модели {model_name} из файла {model_path}: {e}")
             return None
             
     def unload_model(self, model_name: str) -> None:
