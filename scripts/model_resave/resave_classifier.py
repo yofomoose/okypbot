@@ -1,16 +1,18 @@
 import joblib
 import os
 
-# Путь к исходной модели (относительно корня проекта)
-SRC_MODEL_PATH = os.path.join('bot_model', 'classifier.pkl')
-DST_MODEL_PATH = os.path.join('bot_model', 'classifier.pkl')
+files = [
+    ('bot_model/classifier.pkl', 'bot_model/classifier.pkl'),
+    ('bot_model/label_encoder.pkl', 'bot_model/label_encoder.pkl'),
+    # Добавьте другие файлы, если нужно
+]
 
-if not os.path.exists(SRC_MODEL_PATH):
-    raise FileNotFoundError(f'Исходная модель не найдена: {SRC_MODEL_PATH}')
-
-print(f'Загрузка модели из {SRC_MODEL_PATH}...')
-model = joblib.load(SRC_MODEL_PATH)
-
-print(f'Сохраняем модель в {DST_MODEL_PATH}...')
-joblib.dump(model, DST_MODEL_PATH)
-print('Модель успешно пересохранена!')
+for src, dst in files:
+    if not os.path.exists(src):
+        print(f'Файл не найден: {src}')
+        continue
+    print(f'Загрузка: {src}')
+    obj = joblib.load(src)
+    print(f'Сохраняем: {dst}')
+    joblib.dump(obj, dst)
+    print(f'OK: {dst}')
