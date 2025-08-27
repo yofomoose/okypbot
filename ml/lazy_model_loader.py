@@ -73,6 +73,10 @@ class LazyModelLoader:
                 logger.error(f"Файл {model_path} имеет неподдерживаемое расширение: .{ext}. Загрузка запрещена!")
                 raise ValueError(f"Неподдерживаемое расширение файла модели: .{ext}")
 
+
+            logger.info(f"Загружен объект типа: {type(model)}, методы: {dir(model)}")
+            if not hasattr(model, 'get_stats'):
+                logger.error(f"Загруженный объект из файла {model_path} не содержит метод 'get_stats'! Тип: {type(model)}. Методы: {dir(model)}")
             self._loaded_models[model_name] = model
             logger.info(f"Модель {model_name} успешно загружена")
             return model
