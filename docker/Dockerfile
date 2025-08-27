@@ -124,7 +124,9 @@ RUN ls -la /app/bot_model/ || true && \
 
 USER app
 
-# Проверяем установку перед запуском
+
+# Проверяем корректность установки numpy и его core-модуля
+RUN /opt/venv/bin/python -c "import numpy; print('NumPy version:', numpy.__version__); import numpy.core; print('NumPy core import OK')"
 RUN python -c "import numpy; from numpy.core import *; print('NumPy core loaded successfully')"
 
 # Команда запуска приложения
