@@ -78,12 +78,9 @@ class LazyModelLoader:
 
             logger.warning(f"Попытка загрузки файла: {model_path}")
             logger.info(f"Загружаем модель {model_name} из {model_path}")
+
             ext = str(model_path).lower().split('.')[-1]
-            if ext == 'pkl':
-                logger.warning(f"Открываю файл для pickle.load: {model_path}")
-                with open(model_path, 'rb') as f:
-                    model = pickle.load(f)
-            elif ext == 'joblib':
+            if ext in ('pkl', 'joblib'):
                 logger.warning(f"Открываю файл для joblib.load: {model_path}")
                 model = joblib.load(model_path)
             else:
