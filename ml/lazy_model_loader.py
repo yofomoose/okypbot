@@ -40,14 +40,19 @@ class LazyModelLoader:
         return self.load_model(first_model)
     """Класс для ленивой загрузки ML моделей"""
     
-    def __init__(self, model_paths: Dict[str, Path]):
+    def __init__(self, model_paths):
         """
-        Инициализация загрузчика моделей
-        
-        Args:
-            model_paths: Словарь путей к файлам моделей {имя_модели: путь}
+        Универсальный конструктор: принимает либо словарь {имя: путь}, либо строку/Path (один файл).
         """
-        self.model_paths = model_paths
+        if isinstance(model_paths, (str, Path)):
+            # Если передан путь к одному файлу, используем имя файла без расширения как ключ
+            p = Path(model_paths)
+            key = p.stem
+            self.model_paths = {key: p}
+        elif isinstance(model_paths, dict):
+            self.model_paths = model_paths
+        else:
+            raise ValueError("model_paths должен быть либо dict, либо str/Path")
         self._loaded_models: Dict[str, Any] = {}
         self._model_metadata: Dict[str, Dict] = {}
         
