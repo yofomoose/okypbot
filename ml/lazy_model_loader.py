@@ -26,6 +26,18 @@ except ImportError as e:
     raise
 
 class LazyModelLoader:
+    def load(self) -> Optional[Any]:
+        """
+        Обратная совместимость: загрузить первую доступную модель из model_paths.
+        Если моделей несколько, логирует предупреждение.
+        """
+        if not self.model_paths:
+            logger.error("Нет доступных моделей для загрузки (model_paths пуст)")
+            return None
+        if len(self.model_paths) > 1:
+            logger.warning(f"В model_paths несколько моделей: {list(self.model_paths.keys())}. Будет загружена первая.")
+        first_model = next(iter(self.model_paths.keys()))
+        return self.load_model(first_model)
     """Класс для ленивой загрузки ML моделей"""
     
     def __init__(self, model_paths: Dict[str, Path]):
