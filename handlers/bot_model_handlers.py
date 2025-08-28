@@ -56,7 +56,12 @@ async def cmd_bot_model_info(message: Message):
         active_model = classifier_stats.get('active_model', 'Unknown')
         text += f"\n🎯 **Активная модель**: {active_model}\n"
         
-        await message.answer(text, parse_mode="Markdown")
+        import re
+        def escape_markdown(text):
+            # Экранируем спецсимволы Markdown V2
+            return re.sub(r'([_\*\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
+
+        await message.answer(escape_markdown(text), parse_mode="MarkdownV2")
         
     except Exception as e:
         logger.error(f"Ошибка в bot_model info: {e}")
@@ -95,7 +100,11 @@ async def cmd_test_bot_model(message: Message):
             except Exception as e:
                 text += f"**Тест {i}**: Ошибка - {str(e)}\n\n"
         
-        await message.answer(text, parse_mode="Markdown")
+        import re
+        def escape_markdown(text):
+            return re.sub(r'([_\*\[\]()~`>#+\-=|{}.!])', r'\\\1', text)
+
+        await message.answer(escape_markdown(text), parse_mode="MarkdownV2")
         
     except Exception as e:
         logger.error(f"Ошибка в test_bot_model: {e}")

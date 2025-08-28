@@ -47,19 +47,19 @@ class TextClassifier:
             self.bot_model_adapter = None
             return False
             
+
     async def classify(self, text: str) -> Tuple[str, float]:
         """Классифицирует текст, возвращает категорию и уверенность"""
         try:
             normalized = normalize_text(text)
             if not normalized:
                 return "Пустой запрос", 0.0
-                
             logger.info(f"Классифицируем текст: {text}")
-
             # Используем только bot_model для классификации
             if self.bot_model_adapter:
                 try:
-                    result = self.bot_model_adapter.predict(normalized)
+                    # Исправлено: передаём список (batch из 1) для predict
+                    result = self.bot_model_adapter.predict([normalized])
                     if result:
                         category, confidence = result
                         logger.info(f"✅ Результат классификации bot_model: {category} ({confidence:.2%})")
@@ -70,12 +70,14 @@ class TextClassifier:
                     logger.error(f"❌ Ошибка при классификации bot_model: {e}")
             else:
                 logger.error("❌ bot_model не инициализирована")
-                
             return "Модель не обучена", 0.0
-            
         except Exception as e:
             logger.error(f"❌ Ошибка классификации: {e}")
             return "Ошибка классификации", 0.0
+
+    def get_stats(self):
+        """ Заглушка для совместимости с внешними вызовами """
+        return {}
             
     async def classify_batch(self, texts: List[str]) -> List[Tuple[str, float]]:
         """Классифицирует список текстов"""
