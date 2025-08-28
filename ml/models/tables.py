@@ -17,11 +17,22 @@ class Classification(Base):
     
     id = Column(Integer, primary_key=True)
     text = Column(String, nullable=False)
-    category = Column(String, nullable=False)
+    predicted_category = Column(String, nullable=False)
     confidence = Column(Float)
+    user_id = Column(BigInteger)
+    telegram_user_id = Column(BigInteger)
     created_by = Column(BigInteger, ForeignKey('users.telegram_id'))
     created_at = Column(DateTime, default=datetime.utcnow)
     is_training = Column(Boolean, default=False)
+    
+    # Поля для обратной связи
+    is_correct = Column(Boolean, nullable=True)
+    correct_category = Column(String, nullable=True)
+    feedback_at = Column(DateTime, nullable=True)
+    
+    # Техническая информация
+    model_version = Column(String, nullable=True)
+    processing_time = Column(Float, nullable=True)
 
 class TrainingExample(Base):
     __tablename__ = "training_examples"

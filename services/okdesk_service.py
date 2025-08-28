@@ -144,6 +144,15 @@ class OkdeskService:
             # Добавляем author_id если указан
             if author_id:
                 data["comment"]["author_id"] = author_id
+            else:
+                # Если author_id не указан, пробуем получить текущего пользователя API
+                current_user = await self.get_current_user()
+                if current_user and 'id' in current_user:
+                    data["comment"]["author_id"] = current_user['id']
+                    logger.info(f"Используем ID текущего API пользователя: {current_user['id']}")
+                else:
+                    logger.warning("Не удалось получить author_id для комментария, пропускаем добавление")
+                    return False
             
             # Добавляем API токен в параметры запроса
             params = {'api_token': self.api_key}
