@@ -57,7 +57,11 @@ async def main():
         logger.warning(f"Не удалось инициализировать БД: {e}")
     
     # Инициализация бота и диспетчера
-    bot = Bot(token=BOT_TOKEN)
+    bot = Bot(
+        token=BOT_TOKEN,
+        timeout=30,  # Увеличиваем timeout до 30 секунд
+        retry_delay=5  # Задержка между повторными попытками
+    )
     dp = Dispatcher(storage=MemoryStorage())
     
     # Инициализация ML сервиса

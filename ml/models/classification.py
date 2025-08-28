@@ -8,20 +8,21 @@ class Classification(Base):
 
     id = Column(Integer, primary_key=True)
     text = Column(Text, nullable=False)  # Упрощено без шифрования
-    category = Column(String, nullable=False)
+    predicted_category = Column(String, nullable=False)  # Унифицировано с tables.py
     confidence = Column(Float)
+    user_id = Column(BigInteger)  # Добавлено для совместимости
     telegram_user_id = Column(BigInteger)  # Изменено на BigInteger для больших Telegram ID
     created_at = Column(DateTime, default=datetime.utcnow)
-    
+
     # Поля для обратной связи и обучения
     is_correct = Column(Boolean, nullable=True)  # Правильно ли классифицировано (пользователь подтверждает)
     correct_category = Column(String, nullable=True)  # Правильная категория, если is_correct=False
     feedback_at = Column(DateTime, nullable=True)  # Когда получена обратная связь
     is_training = Column(Boolean, default=False)  # Используется ли для обучения
-    
+
     # Техническая информация
     model_version = Column(String, nullable=True)  # Версия модели
     processing_time = Column(Float, nullable=True)  # Время обработки в секундах
 
     def __repr__(self):
-        return f"<Classification(id={self.id}, category={self.category}, confidence={self.confidence})>"
+        return f"<Classification(id={self.id}, predicted_category={self.predicted_category}, confidence={self.confidence})>"

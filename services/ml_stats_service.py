@@ -155,23 +155,30 @@ class MLStatsService:
         try:
             with get_session() as session:
                 classification = session.query(Classification).filter_by(id=classification_id).first()
-                
+
                 if not classification:
+                    logger.warning(f"Классификация с ID {classification_id} не найдена")
                     return None
-                    
+
+                # Проверяем наличие атрибута predicted_category
+                predicted_category = getattr(classification, 'predicted_category', None)
+                if predicted_category is None:
+                    # Если атрибут отсутствует, пробуем category
+                    predicted_category = getattr(classification, 'category', 'Неизвестная категория')
+
                 return {
                     "id": classification.id,
-                    "text": classification.text,
-                    "predicted_category": classification.predicted_category,
-                    "confidence": classification.confidence,
-                    "is_correct": classification.is_correct,
-                    "correct_category": classification.correct_category,
-                    "user_id": classification.user_id,
-                    "telegram_user_id": classification.telegram_user_id,
-                    "created_at": classification.created_at,
-                    "feedback_at": classification.feedback_at
+                    "text": getattr(classification, 'text', ''),
+                    "predicted_category": predicted_category,
+                    "confidence": getattr(classification, 'confidence', 0.0),
+                    "is_correct": getattr(classification, 'is_correct', None),
+                    "correct_category": getattr(classification, 'correct_category', None),
+                    "user_id": getattr(classification, 'user_id', None),
+                    "telegram_user_id": getattr(classification, 'telegram_user_id', None),
+                    "created_at": getattr(classification, 'created_at', None),
+                    "feedback_at": getattr(classification, 'feedback_at', None)
                 }
-                
+
         except Exception as e:
             logger.error(f"Ошибка получения классификации {classification_id}: {e}")
             return None

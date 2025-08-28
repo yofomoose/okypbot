@@ -95,22 +95,33 @@ class OkdeskService:
             ]
             
             for endpoint in endpoints:
-                url = f"{self.base_url}{endpoint}"
-                params = {'api_token': self.api_key}
-                
-                async with self.session.get(url, params=params) as response:
-                    if response.status == 200:
-                        data = await response.json()
-                        logger.info(f"Получены данные пользователя через {endpoint}")
-                        
-                        # Если это список (как /employees), берем первого
-                        if isinstance(data, list) and len(data) > 0:
-                            return data[0]
-                        elif isinstance(data, dict):
-                            return data
-                    else:
-                        logger.debug(f"Endpoint {endpoint} вернул {response.status}")
-                        
+                try:
+                    url = f"{self.base_url}{endpoint}"
+                    params = {'api_token': self.api_key}
+                    
+                    logger.debug(f"Пробуем endpoint: {endpoint}")
+                    async with self.session.get(url, params=params) as response:
+                        if response.status == 200:
+                            data = await response.json()
+                            logger.info(f"Получены данные пользователя через {endpoint}")
+                            
+                            # Если это список (как /employees), берем первого
+                            if isinstance(data, list) and len(data) > 0:
+                                user = data[0]
+                                logger.info(f"Выбран первый пользователь из списка: {user.get('id', 'Unknown')}")
+                                return user
+                            elif isinstance(data, dict):
+                                logger.info(f"Получен пользователь: {data.get('id', 'Unknown')}")
+                                return data
+                            else:
+                                logger.warning(f"Неожиданный формат данных от {endpoint}: {type(data)}")
+                        else:
+                            logger.debug(f"Endpoint {endpoint} вернул {response.status}")
+                            
+                except Exception as endpoint_error:
+                    logger.warning(f"Ошибка при запросе к {endpoint}: {endpoint_error}")
+                    continue
+            
             logger.warning("Не удалось получить данные пользователя через все endpoints")
             return None
             
@@ -145,28 +156,47 @@ class OkdeskService:
             if author_id:
                 data["comment"]["author_id"] = author_id
             else:
-                # Если author_id не указан, пробуем получить текущего пользователя API
+                # Пробуем получить текущего пользователя API
+                logger.info("Пытаемся получить текущего пользователя API для author_id")
                 current_user = await self.get_current_user()
-                if current_user and 'id' in current_user:
+                if current_user and isinstance(current_user, dict) and 'id' in current_user:
                     data["comment"]["author_id"] = current_user['id']
                     logger.info(f"Используем ID текущего API пользователя: {current_user['id']}")
                 else:
-                    logger.warning("Не удалось получить author_id для комментария, пробуем добавить без него")
+                    logger.warning("Не удалось получить author_id, отправляем запрос без него")
                     # Убираем author_id из данных, возможно API позволит создать комментарий без него
-                    if "author_id" in data["comment"]:
-                        del data["comment"]["author_id"]
+                    pass  # Не добавляем author_id
             
             # Добавляем API токен в параметры запроса
             params = {'api_token': self.api_key}
             
+            logger.info(f"Отправляем запрос на добавление комментария к заявке {issue_id}")
+            logger.debug(f"Данные запроса: {data}")
+            
             async with self.session.post(url, json=data, params=params) as response:
                 if response.status in [200, 201]:  # Принимаем и 200, и 201 как успешные
-                    logger.info(f"Комментарий добавлен к заявке {issue_id}")
+                    logger.info(f"Комментарий успешно добавлен к заявке {issue_id}")
                     return True
                 else:
                     error_text = await response.text()
                     logger.error(f"Ошибка добавления комментария: {response.status} - {error_text}")
-                    return False
+                    
+                    # Если ошибка 422 с author_id, попробуем без него
+                    if response.status == 422 and "author_id" in error_text:
+                        logger.warning("Повторяем запрос без author_id")
+                        if "author_id" in data["comment"]:
+                            del data["comment"]["author_id"]
+                        
+                        async with self.session.post(url, json=data, params=params) as retry_response:
+                            if retry_response.status in [200, 201]:
+                                logger.info(f"Комментарий успешно добавлен к заявке {issue_id} (без author_id)")
+                                return True
+                            else:
+                                retry_error_text = await retry_response.text()
+                                logger.error(f"Ошибка повторного запроса: {retry_response.status} - {retry_error_text}")
+                                return False
+                    else:
+                        return False
                     
         except Exception as e:
             logger.error(f"Ошибка при добавлении комментария: {e}")
