@@ -27,6 +27,8 @@ class TextClassifier:
     def __init__(self):
         self.bot_model_adapter: BotModelAdapter | None = None
         self.vectorizer = TextVectorizer()
+        self._user_corrections = 0  # Счетчик исправлений пользователя
+        self._correction_threshold = 10  # Порог для отключения LightGBM
 
     async def initialize(self) -> bool:
         """Инициализация: загрузка bot_model (в отдельном потоке)."""
@@ -37,10 +39,13 @@ class TextClassifier:
         """Синхронная загрузка bot_model с диска."""
         try:
             logger.info("Инициализация bot_model...")
-            self.bot_model_adapter = BotModelAdapter(model_dir="/app/bot_model")
+            # Используем относительный путь или переменную окружения
+            import os
+            model_dir = os.getenv("BOT_MODEL_DIR", "bot_model")
+            self.bot_model_adapter = BotModelAdapter(model_dir=model_dir)
 
             if not self.bot_model_adapter.load_model():
-                logger.error("Не удалось загрузить файлы bot_model из /app/bot_model")
+                logger.error(f"Не удалось загрузить файлы bot_model из {model_dir}")
                 return False
 
             logger.info("OK: bot_model успешно инициализирован")
@@ -110,4 +115,10 @@ class TextClassifier:
     async def retrain_model(self) -> bool:
         # Заглушка: переобучение не реализовано на лету
         return False
+
+    def clear_cache(self) -> int:
+        """Очищает кеш предсказаний"""
+        if self.bot_model_adapter:
+            return self.bot_model_adapter.clear_cache()
+        return 0
 

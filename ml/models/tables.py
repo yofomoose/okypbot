@@ -17,10 +17,10 @@ class Classification(Base):
     
     id = Column(Integer, primary_key=True)
     text = Column(String, nullable=False)
-    category = Column(String, nullable=False)
+    predicted_category = Column(String, nullable=False)  # Изменено с category на predicted_category
     confidence = Column(Float)
+    user_id = Column(BigInteger)  # Изменено с telegram_user_id на user_id для совместимости
     telegram_user_id = Column(BigInteger)
-    created_by = Column(BigInteger, ForeignKey('users.telegram_id'))
     created_at = Column(DateTime, default=datetime.utcnow)
     is_training = Column(Boolean, default=False)
     

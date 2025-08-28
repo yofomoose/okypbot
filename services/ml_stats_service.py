@@ -46,9 +46,10 @@ class MLStatsService:
             # Сохраняем основную классификацию
             classification = Classification(
                 text=text,
-                category=predicted_category,
+                predicted_category=predicted_category,
                 confidence=confidence,
-                created_by=telegram_user_id,
+                user_id=user_id,
+                telegram_user_id=telegram_user_id,
                 created_at=datetime.utcnow()
             )
             session.add(classification)
@@ -161,7 +162,7 @@ class MLStatsService:
                 return {
                     "id": classification.id,
                     "text": classification.text,
-                    "predicted_category": classification.category,
+                    "predicted_category": classification.predicted_category,
                     "confidence": classification.confidence,
                     "is_correct": classification.is_correct,
                     "correct_category": classification.correct_category,
@@ -232,13 +233,13 @@ class MLStatsService:
                 training_data = []
                 for c in classifications:
                     # Используем правильную категорию или предсказанную (если она правильная)
-                    true_category = c.correct_category if not c.is_correct else c.category
+                    true_category = c.correct_category if not c.is_correct else c.predicted_category
                     
                     training_data.append({
                         "text": c.text,
                         "category": true_category,
                         "is_correction": not c.is_correct,
-                        "original_prediction": c.category,
+                        "original_prediction": c.predicted_category,
                         "confidence": c.confidence,
                         "timestamp": c.created_at.isoformat()
                     })

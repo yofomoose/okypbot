@@ -84,7 +84,7 @@ class MLTrainingService:
             
             if ml_service and ml_service.classifier:
                 # Добавляем пример для KNN (асинхронно)
-                await ml_service.classifier.add_training_example(text, category, user_id)
+                await ml_service.classifier.add_training_example(text, category)
                 
                 # Увеличиваем счетчик исправлений
                 ml_service.classifier._user_corrections += 1

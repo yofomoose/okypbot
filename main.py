@@ -45,6 +45,11 @@ async def main():
     """Главная функция запуска бота"""
     # Инициализация БД
     try:
+        # Импортируем модели перед инициализацией БД
+        from ml.models.tables import User, Classification, TrainingExample
+        from ml.models.stats import UsageStats, ModelStats
+        from ml.models.feedback import UserFeedback
+        
         from config.db_config import init_database
         init_database()
         logger.info("База данных инициализирована")
