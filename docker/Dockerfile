@@ -133,5 +133,9 @@ USER app
 RUN /opt/venv/bin/python -c "import numpy; print('NumPy version:', numpy.__version__); import numpy.core; print('NumPy core import OK')"
 RUN python -c "import numpy; from numpy.core import *; print('NumPy core loaded successfully')"
 
+# Добавляем скрипт проверки базы данных
+COPY --chown=app:app scripts/check_database.sh /app/scripts/
+RUN chmod +x /app/scripts/check_database.sh
+
 # Команда запуска приложения
-CMD ["python", "main.py"]
+CMD ["/bin/bash", "-c", "/app/scripts/check_database.sh && python main.py"]

@@ -151,8 +151,10 @@ class OkdeskService:
                     data["comment"]["author_id"] = current_user['id']
                     logger.info(f"Используем ID текущего API пользователя: {current_user['id']}")
                 else:
-                    logger.warning("Не удалось получить author_id для комментария, пропускаем добавление")
-                    return False
+                    logger.warning("Не удалось получить author_id для комментария, пробуем добавить без него")
+                    # Убираем author_id из данных, возможно API позволит создать комментарий без него
+                    if "author_id" in data["comment"]:
+                        del data["comment"]["author_id"]
             
             # Добавляем API токен в параметры запроса
             params = {'api_token': self.api_key}

@@ -161,7 +161,7 @@ class MLStatsService:
                 return {
                     "id": classification.id,
                     "text": classification.text,
-                    "predicted_category": classification.predicted_category,
+                    "predicted_category": classification.category,
                     "confidence": classification.confidence,
                     "is_correct": classification.is_correct,
                     "correct_category": classification.correct_category,
@@ -197,7 +197,7 @@ class MLStatsService:
                 # Статистика по категориям
                 category_stats = {}
                 for c in classifications:
-                    cat = c.predicted_category
+                    cat = c.category
                     if cat not in category_stats:
                         category_stats[cat] = {"total": 0, "correct": 0}
                     category_stats[cat]["total"] += 1
@@ -232,13 +232,13 @@ class MLStatsService:
                 training_data = []
                 for c in classifications:
                     # Используем правильную категорию или предсказанную (если она правильная)
-                    true_category = c.correct_category if not c.is_correct else c.predicted_category
+                    true_category = c.correct_category if not c.is_correct else c.category
                     
                     training_data.append({
                         "text": c.text,
                         "category": true_category,
                         "is_correction": not c.is_correct,
-                        "original_prediction": c.predicted_category,
+                        "original_prediction": c.category,
                         "confidence": c.confidence,
                         "timestamp": c.created_at.isoformat()
                     })

@@ -67,6 +67,7 @@ services:
       - ml_data:/app/ml
       - bot_logs:/app/logs
       - bot_data:/app/data
+      - database_data:/app/database
     depends_on:
       postgres:
         condition: service_healthy
@@ -116,6 +117,7 @@ volumes:
   ml_data:
   bot_logs:
   bot_data:
+  database_data:
   nginx_logs:
 
 networks:

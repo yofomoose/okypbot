@@ -8,9 +8,8 @@ class Classification(Base):
 
     id = Column(Integer, primary_key=True)
     text = Column(Text, nullable=False)  # Упрощено без шифрования
-    predicted_category = Column(String, nullable=False)
+    category = Column(String, nullable=False)
     confidence = Column(Float)
-    user_id = Column(BigInteger)  # Изменено на BigInteger для больших Telegram ID
     telegram_user_id = Column(BigInteger)  # Изменено на BigInteger для больших Telegram ID
     created_at = Column(DateTime, default=datetime.utcnow)
     
@@ -25,4 +24,4 @@ class Classification(Base):
     processing_time = Column(Float, nullable=True)  # Время обработки в секундах
 
     def __repr__(self):
-        return f"<Classification(id={self.id}, category={self.predicted_category}, confidence={self.confidence})>"
+        return f"<Classification(id={self.id}, category={self.category}, confidence={self.confidence})>"

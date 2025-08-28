@@ -4,15 +4,18 @@
 ALTER TABLE classifications
     ALTER COLUMN confidence SET DEFAULT 0.0;
 
+-- Переименовываем predicted_category в category
+ALTER TABLE classifications
+    RENAME COLUMN predicted_category TO category;
+
 -- Удаляем старые неиспользуемые колонки
-ALTER TABLE classifications 
-    DROP COLUMN IF EXISTS predicted_category,
+ALTER TABLE classifications
     DROP COLUMN IF EXISTS user_id,
     DROP COLUMN IF EXISTS telegram_user_id,
     DROP COLUMN IF EXISTS model_version;
 
 -- Переименовываем и устанавливаем правильные настройки
-ALTER TABLE classifications 
+ALTER TABLE classifications
     ALTER COLUMN text TYPE TEXT,
     ALTER COLUMN category TYPE TEXT,
     ALTER COLUMN confidence TYPE REAL,

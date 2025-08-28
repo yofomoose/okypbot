@@ -17,9 +17,8 @@ class Classification(Base):
     
     id = Column(Integer, primary_key=True)
     text = Column(String, nullable=False)
-    predicted_category = Column(String, nullable=False)
+    category = Column(String, nullable=False)
     confidence = Column(Float)
-    user_id = Column(BigInteger)
     telegram_user_id = Column(BigInteger)
     created_by = Column(BigInteger, ForeignKey('users.telegram_id'))
     created_at = Column(DateTime, default=datetime.utcnow)

@@ -53,6 +53,7 @@ help:
 	@echo "$(YELLOW)База данных:$(RESET)"
 	@echo "  make backup       - Создание бэкапа БД"
 	@echo "  make restore FILE=backup.sql - Восстановление из бэкапа"
+	@echo "  make check-db     - Проверка состояния баз данных"
 	@echo ""
 	@echo "$(YELLOW)ML модель:$(RESET)"
 	@echo "  make check-ml     - Проверка ML модели"
@@ -92,6 +93,8 @@ start:
 
 stop:
 	@echo "⏹️ Остановка сервисов..."
+	@echo "  💾 Создание бэкапа перед остановкой..."
+	@make backup >/dev/null 2>&1 || echo "    ⚠️ Не удалось создать бэкап"
 	@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) down
 
 restart:
@@ -130,7 +133,11 @@ migrate:
 backup:
 	@echo "💾 Создание бэкапа..."
 	@mkdir -p backups
-	@docker exec $(CONTAINER_DB) pg_dump -U postgres okypbot > backups/okypbot_$$(date +%Y%m%d_%H%M%S).sql
+	@echo "  📄 Бэкап файловой базы данных..."
+	@docker cp $(CONTAINER_BOT):/app/database/users.json backups/users_$$(date +%Y%m%d_%H%M%S).json 2>/dev/null || echo "    ⚠️ Файл users.json не найден в контейнере"
+	@docker cp $(CONTAINER_BOT):/app/database/user_issues.json backups/user_issues_$$(date +%Y%m%d_%H%M%S).json 2>/dev/null || echo "    ⚠️ Файл user_issues.json не найден в контейнере"
+	@echo "  🗄️ Бэкап PostgreSQL..."
+	@docker exec $(CONTAINER_DB) pg_dump -U postgres okypbot > backups/postgres_okypbot_$$(date +%Y%m%d_%H%M%S).sql
 	@echo "✅ Бэкап создан в директории backups/"
 
 restore:
@@ -139,8 +146,27 @@ restore:
 		exit 1; \
 	fi
 	@echo "📥 Восстановление из $(FILE)..."
-	@cat $(FILE) | docker exec -i $(CONTAINER_DB) psql -U postgres -d okypbot
-	@echo "✅ База данных восстановлена"
+	@if [[ "$(FILE)" == *.json ]]; then \
+		echo "  📄 Восстановление файловой базы данных..."; \
+		@docker cp $(FILE) $(CONTAINER_BOT):/app/database/users.json; \
+		echo "  🔄 Перезапуск бота для применения изменений..."; \
+		@$(DOCKER_COMPOSE) -f $(COMPOSE_FILE) restart bot; \
+	else \
+		echo "  🗄️ Восстановление PostgreSQL..."; \
+		@cat $(FILE) | docker exec -i $(CONTAINER_DB) psql -U postgres -d okypbot; \
+	fi
+	@echo "✅ Данные восстановлены"
+
+check-db:
+	@echo "🔍 Проверка состояния баз данных..."
+	@echo ""
+	@echo "📄 Файловая база данных (users.json):"
+	@docker exec $(CONTAINER_BOT) ls -la /app/database/users.json 2>/dev/null || echo "  ❌ Файл не найден"
+	@docker exec $(CONTAINER_BOT) wc -l /app/database/users.json 2>/dev/null || echo "  ❌ Ошибка чтения файла"
+	@echo ""
+	@echo "🗄️ PostgreSQL база данных:"
+	@docker exec $(CONTAINER_DB) psql -U postgres -d okypbot -c "SELECT COUNT(*) as users_count FROM users;" 2>/dev/null || echo "  ❌ Ошибка подключения"
+	@docker exec $(CONTAINER_DB) psql -U postgres -d okypbot -c "SELECT COUNT(*) as classifications_count FROM classifications;" 2>/dev/null || echo "  ❌ Ошибка подключения"
 
 # Обновление
 update:
@@ -226,4 +252,4 @@ disk-usage:
 	@echo "📊 Использование диска Docker:"
 	@docker system df -v
 
-.PHONY: help setup deploy update start stop restart rebuild logs logs-bot logs-db status backup restore check-ml train-ml clean clean-all disk-usage
+.PHONY: help setup deploy update start stop restart rebuild logs logs-bot logs-db status backup restore check-db check-ml train-ml clean clean-all disk-usage

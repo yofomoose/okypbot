@@ -381,6 +381,32 @@ async def confirm_registration(callback: CallbackQuery, state: FSMContext):
                 okdesk_company_id=company_id
             )
             
+            # Синхронизируем пользователя с PostgreSQL для статистики ML
+            try:
+                from services.ml_stats_service import ml_stats_service
+                from config.db_config import SessionLocal
+                from ml.models.tables import User
+                
+                session = SessionLocal()
+                try:
+                    # Проверяем, существует ли пользователь в PostgreSQL
+                    pg_user = session.query(User).filter_by(telegram_id=user_id).first()
+                    if not pg_user:
+                        # Создаем пользователя в PostgreSQL
+                        pg_user = User(
+                            telegram_id=user_id,
+                            is_admin=False,
+                            is_trainer=False
+                        )
+                        session.add(pg_user)
+                        session.commit()
+                        logger.info(f"Пользователь {user_id} синхронизирован с PostgreSQL")
+                finally:
+                    session.close()
+            except Exception as sync_error:
+                logger.warning(f"Не удалось синхронизировать пользователя с PostgreSQL: {sync_error}")
+                # Не прерываем регистрацию из-за ошибки синхронизации
+            
             # Формируем сообщение об успешной регистрации
             success_message = "🎉 **Регистрация завершена успешно!**\n\n✅ Контакт создан в Okdesk\n"
             
