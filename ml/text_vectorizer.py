@@ -61,9 +61,9 @@ class TextVectorizer:
         """
         if not self.is_loaded:
             if not self.load_model():
-                # Возвращаем случайный вектор как fallback
-                logger.warning("Используется случайный вектор (модель не загружена)")
-                return np.random.random(384).astype(np.float32)
+                # Возвращаем нулевой вектор вместо случайного
+                logger.warning("Модель векторизации не загружена, возвращаем нулевой вектор")
+                return np.zeros(384, dtype=np.float32)
         
         try:
             # Предобрабатываем текст
@@ -93,8 +93,8 @@ class TextVectorizer:
             
         except Exception as e:
             logger.error(f"Ошибка векторизации текста: {e}")
-            # Возвращаем случайный вектор как fallback
-            return np.random.random(384).astype(np.float32)
+            # Возвращаем нулевой вектор вместо случайного
+            return np.zeros(384, dtype=np.float32)
     
     def vectorize_batch(self, texts: List[str]) -> np.ndarray:
         """

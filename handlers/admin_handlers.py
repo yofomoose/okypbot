@@ -402,6 +402,60 @@ async def test_bot_model_callback(callback: CallbackQuery):
     if not is_admin(callback.from_user.id):
         await callback.answer("❌ У вас нет прав администратора", show_alert=True)
         return
+
+    try:
+        # Отвечаем на callback сразу, чтобы избежать timeout
+        await callback.answer("🔄 Тестирую модель...")
+
+        from services.ml_service import ml_service
+
+        # Тестовый текст для классификации
+        test_text = "Не работает интернет, скорость очень низкая, постоянно обрывается соединение"
+
+        # Классифицируем текст
+        result = await ml_service.classify_issue(test_text, callback.from_user.id)
+
+        if result and result.get('success'):
+            category = result.get('category', 'Не определена')
+            confidence = result.get('confidence', 0.0)
+
+            response_text = (
+                f"🧪 <b>Результат тестирования ML модели</b>\n\n"
+                f"📝 <b>Тестовый текст:</b>\n<i>{test_text}</i>\n\n"
+                f"🎯 <b>Предсказанная категория:</b> {category}\n"
+                f"📊 <b>Уверенность модели:</b> {confidence:.1%}\n\n"
+                f"✅ <b>Статус:</b> Модель работает корректно"
+            )
+        else:
+            response_text = (
+                f"❌ <b>Ошибка тестирования ML модели</b>\n\n"
+                f"Модель вернула некорректный результат или не загружена.\n"
+                f"Проверьте логи для получения дополнительной информации."
+            )
+
+        await callback.message.edit_text(
+            response_text,
+            parse_mode="HTML"
+        )
+
+    except Exception as e:
+        logger.error(f"Ошибка в test_bot_model_callback: {e}")
+        # Пытаемся ответить на callback, игнорируя возможный timeout
+        try:
+            await callback.answer("❌ Ошибка тестирования", show_alert=True)
+        except Exception:
+            # Игнорируем ошибку callback answer если уже timeout
+            pass
+
+        # Пытаемся обновить сообщение
+        try:
+            await callback.message.edit_text(
+                "❌ Произошла ошибка при тестировании модели",
+                parse_mode="HTML"
+            )
+        except Exception:
+            # Игнорируем ошибку редактирования если сообщение уже не доступно
+            pass
     
     try:
         from handlers.bot_model_handlers import cmd_test_bot_model

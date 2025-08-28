@@ -48,7 +48,12 @@ class TextClassifier:
                 logger.error(f"Не удалось загрузить файлы bot_model из {model_dir}")
                 return False
 
-            logger.info("OK: bot_model успешно инициализирован")
+            # Инициализируем векторизатор
+            if not self.vectorizer.load_model():
+                logger.error("Не удалось загрузить модель векторизации")
+                return False
+
+            logger.info("OK: bot_model и векторизатор успешно инициализированы")
             return True
 
         except Exception as e:

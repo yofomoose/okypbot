@@ -534,9 +534,14 @@
     "ЭЦП: Настройка КриптоПро",
     "ЭЦП: Настройка сайтов/порталов"
   ],
-  "training_samples": 19366,
+  "training_samples": 15035,
   "feature_count": 384,
   "n_neighbors": 5,
   "optimized_for": "real_time_feedback",
-  "update_strategy": "incremental_addition"
+  "update_strategy": "incremental_addition",
+  "fixed_date": "2025-08-29T00:28:20.929503",
+  "vectorizer_model": "sentence-transformers/all-MiniLM-L6-v2",
+  "categories_count": 118,
+  "retrained_date": "2025-08-29T00:36:24.124045",
+  "data_source": "training_examples.pkl"
 }
