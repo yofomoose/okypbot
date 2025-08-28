@@ -32,8 +32,16 @@ class MLStatsService:
             # Проверяем существование пользователя
             user = session.query(User).filter_by(telegram_id=telegram_user_id).first()
             if not user:
-                logger.warning(f"Пользователь с telegram_id={telegram_user_id} не найден")
-                return None
+                logger.warning(f"Пользователь с telegram_id={telegram_user_id} не найден, создаем нового")
+                # Создаем нового пользователя в SQL базе
+                user = User(
+                    telegram_id=telegram_user_id,
+                    is_admin=False,
+                    is_trainer=False
+                )
+                session.add(user)
+                session.commit()
+                logger.info(f"Создан новый пользователь в SQL базе: telegram_id={telegram_user_id}")
                 
             # Сохраняем основную классификацию
             classification = Classification(
@@ -90,8 +98,16 @@ class MLStatsService:
                 from ml.models.tables import User
                 user = session.query(User).filter_by(telegram_id=telegram_user_id).first()
                 if not user:
-                    logger.warning(f"Пользователь с telegram_id={telegram_user_id} не найден")
-                    return False
+                    logger.warning(f"Пользователь с telegram_id={telegram_user_id} не найден, создаем нового")
+                    # Создаем нового пользователя в SQL базе
+                    user = User(
+                        telegram_id=telegram_user_id,
+                        is_admin=False,
+                        is_trainer=False
+                    )
+                    session.add(user)
+                    session.commit()
+                    logger.info(f"Создан новый пользователь в SQL базе: telegram_id={telegram_user_id}")
                 
                 # Обновляем классификацию
                 classification = session.query(Classification).filter_by(id=classification_id).first()
