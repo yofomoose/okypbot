@@ -63,6 +63,16 @@ services:
       PIP_DISABLE_PIP_VERSION_CHECK: 1
       PYTHONPATH: /app
       BOT_MODEL_DIR: /app/bot_model
+      # ML настройки для производительности
+      SENTENCE_TRANSFORMERS_CACHE: /app/cache
+      TRANSFORMERS_CACHE: /app/cache
+      HUGGINGFACE_HUB_CACHE: /app/cache
+      # NumPy настройки для многопоточности
+      OPENBLAS_NUM_THREADS: 1
+      MKL_NUM_THREADS: 1
+      NUMEXPR_NUM_THREADS: 1
+      OMP_NUM_THREADS: 1
+      NUMPY_EXPERIMENTAL_ARRAY_FUNCTION: 0
     command: python main.py
     volumes:
       - ../bot_model:/app/bot_model

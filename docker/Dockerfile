@@ -117,10 +117,12 @@ WORKDIR /app
 # Копируем код приложения
 COPY --chown=app:app . .
 
-# Проверяем наличие файлов модели
+# Проверяем наличие файлов модели и устанавливаем правильные права
 RUN ls -la /app/bot_model/ || true && \
     chown -R app:app /app/bot_model && \
-    chmod -R 755 /app/bot_model
+    chmod -R 755 /app/bot_model && \
+    # Проверяем наличие training_examples.pkl если он есть
+    if [ -f /app/bot_model/training_examples.pkl ]; then echo "Training data found"; else echo "Training data not found (optional)"; fi
 
 
 # Проверка наличия numpy в venv
@@ -132,6 +134,9 @@ USER app
 # Проверяем корректность установки numpy и его core-модуля
 RUN /opt/venv/bin/python -c "import numpy; print('NumPy version:', numpy.__version__); import numpy.core; print('NumPy core import OK')"
 RUN python -c "import numpy; from numpy.core import *; print('NumPy core loaded successfully')"
+
+# Проверяем установку ML зависимостей
+RUN /opt/venv/bin/python -c "import sklearn, torch, transformers, sentence_transformers; print('ML dependencies OK')"
 
 # Добавляем скрипт проверки базы данных
 COPY --chown=app:app scripts/check_database.sh /app/scripts/
