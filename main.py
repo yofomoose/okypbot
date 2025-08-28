@@ -5,6 +5,7 @@ Okdesk CRM Telegram Bot
 
 import asyncio
 import logging
+import aiohttp
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN, WEBHOOK_ENABLED, WEBHOOK_HOST, WEBHOOK_PORT
@@ -56,12 +57,16 @@ async def main():
     except Exception as e:
         logger.warning(f"Не удалось инициализировать БД: {e}")
     
-    # Инициализация бота и диспетчера
-    bot = Bot(
-        token=BOT_TOKEN,
-        timeout=30,  # Увеличиваем timeout до 30 секунд
-        retry_delay=5  # Задержка между повторными попытками
+    # Инициализация бота и диспетчера для aiogram 3.x
+    from aiogram.client.session.aiohttp import AioHTTPSession
+    import aiohttp
+
+    # Создаем сессию с увеличенными таймаутами
+    session = AioHTTPSession(
+        timeout=aiohttp.ClientTimeout(total=30, connect=10, sock_read=10)
     )
+
+    bot = Bot(token=BOT_TOKEN, session=session)
     dp = Dispatcher(storage=MemoryStorage())
     
     # Инициализация ML сервиса
