@@ -38,6 +38,7 @@ services:
     build: 
       context: ..
       dockerfile: docker/Dockerfile
+      target: production  # multi-stage build
     image: okypbot:${VERSION:-latest}
     container_name: okypbot_app
     environment:
