@@ -40,6 +40,7 @@ class BotModelAdapter:
         self.label_encoder = None
         self.metadata = None
         self.is_loaded = False
+        self._unseen_categories_cache = set()  # Кеш для отслеживания уже залогированных unseen категорий
         
         # Пути к файлам модели
         self.classifier_path = self.model_dir / "classifier.joblib"
@@ -181,32 +182,47 @@ class BotModelAdapter:
                     category = self.label_encoder.inverse_transform([prediction_value])[0]
                 except ValueError as e:
                     # Если категория не найдена в encoder'е, используем fallback
-                    logger.warning(f"Категория {prediction_value} не найдена в label_encoder: {e}")
+                    error_msg = f"Категория {prediction_value} не найдена в label_encoder: {e}"
+                    
+                    # Логируем только если эта категория еще не была залогирована
+                    if prediction_value not in self._unseen_categories_cache:
+                        logger.warning(error_msg)
+                        self._unseen_categories_cache.add(prediction_value)
+                        # Ограничиваем размер кеша
+                        if len(self._unseen_categories_cache) > 100:
+                            self._unseen_categories_cache.clear()
                     
                     # Пытаемся найти ближайших соседей для получения категории
                     if hasattr(self.classifier, 'kneighbors'):
-                        distances, indices = self.classifier.kneighbors(features, n_neighbors=5)
-                        
-                        # Получаем категории ближайших соседей
-                        neighbor_labels = self.classifier._y[indices[0]]
-                        
-                        # Находим наиболее частую категорию среди соседей
-                        unique_labels, counts = np.unique(neighbor_labels, return_counts=True)
-                        most_common_label = unique_labels[np.argmax(counts)]
-                        
-                        # Пытаемся декодировать наиболее частую категорию
                         try:
-                            category = self.label_encoder.inverse_transform([most_common_label])[0]
-                        except ValueError:
-                            # Если и это не работает, ищем первую доступную категорию
+                            distances, indices = self.classifier.kneighbors(features, n_neighbors=min(5, len(self.classifier._y)))
+                            
+                            # Получаем категории ближайших соседей
+                            neighbor_labels = self.classifier._y[indices[0]]
+                            
+                            # Находим наиболее частую категорию среди соседей
+                            unique_labels, counts = np.unique(neighbor_labels, return_counts=True)
+                            most_common_label = unique_labels[np.argmax(counts)]
+                            
+                            # Пытаемся декодировать наиболее частую категорию
+                            try:
+                                category = self.label_encoder.inverse_transform([most_common_label])[0]
+                                logger.debug(f"Использована категория ближайшего соседа: {category}")
+                            except ValueError:
+                                # Если и это не работает, используем первую доступную категорию
+                                available_categories = self.label_encoder.classes_
+                                category = available_categories[0] if len(available_categories) > 0 else "Другое"
+                                logger.debug(f"Использована fallback категория: {category}")
+                        except Exception as neighbor_error:
+                            logger.error(f"Ошибка поиска ближайших соседей: {neighbor_error}")
                             available_categories = self.label_encoder.classes_
                             category = available_categories[0] if len(available_categories) > 0 else "Другое"
-                            logger.warning(f"Использована fallback категория: {category}")
+                            logger.debug(f"Использована fallback категория: {category}")
                     else:
                         # Если нет kneighbors, используем первую доступную категорию
                         available_categories = self.label_encoder.classes_
                         category = available_categories[0] if len(available_categories) > 0 else "Другое"
-                        logger.warning(f"Использована fallback категория: {category}")
+                        logger.debug(f"Использована fallback категория: {category}")
             
             # Получаем уверенность если возможно
             confidence = 0.0
