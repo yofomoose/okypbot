@@ -65,7 +65,7 @@ services:
       BOT_MODEL_DIR: /app/bot_model
     command: python main.py
     volumes:
-      - ./bot_model:/app/bot_model
+      - ../bot_model:/app/bot_model
       - ml_data:/app/ml
       - bot_logs:/app/logs
       - bot_data:/app/data
