@@ -24,7 +24,7 @@ class MLStatsService:
                                 processing_time: float = None) -> Optional[int]:
         """Сохраняет результат классификации в БД"""
         from config.db_config import SessionLocal
-        from database.models import User
+        from ml.models.tables import User
         
         session = SessionLocal()
         
@@ -52,7 +52,7 @@ class MLStatsService:
             # Пытаемся сохранить статистику использования отдельно
             try:
                 usage_stat = UsageStats(
-                    user_id=user_id,
+                    user_id=user.id,
                     telegram_user_id=telegram_user_id,
                     action_type='classify',
                     details={
@@ -86,6 +86,13 @@ class MLStatsService:
         """Сохраняет обратную связь пользователя"""
         try:
             with get_session() as session:
+                # Получаем пользователя
+                from ml.models.tables import User
+                user = session.query(User).filter_by(telegram_id=telegram_user_id).first()
+                if not user:
+                    logger.warning(f"Пользователь с telegram_id={telegram_user_id} не найден")
+                    return False
+                
                 # Обновляем классификацию
                 classification = session.query(Classification).filter_by(id=classification_id).first()
                 if classification:
@@ -97,7 +104,7 @@ class MLStatsService:
                 # Создаем запись обратной связи
                 feedback = UserFeedback(
                     classification_id=classification_id,
-                    user_id=user_id,
+                    user_id=user.id,
                     telegram_user_id=telegram_user_id,
                     feedback_type="correct" if is_correct else "incorrect",
                     is_prediction_correct=is_correct,
@@ -108,7 +115,7 @@ class MLStatsService:
                 
                 # Статистика использования
                 usage_stat = UsageStats(
-                    user_id=user_id,
+                    user_id=user.id,
                     telegram_user_id=telegram_user_id,
                     action_type="feedback",
                     details={
