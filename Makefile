@@ -1,3 +1,15 @@
+# Проверка синхронизации кода ML между хостом и контейнером
+check-ml-sync:
+	@echo "🔍 Проверка актуальности ml/lazy_model_loader.py в контейнере..."
+	@docker exec $(CONTAINER_BOT) md5sum /app/ml/lazy_model_loader.py > /tmp/lazy_model_loader_container.md5 || echo "(нет файла в контейнере)"
+	@md5sum ml/lazy_model_loader.py > /tmp/lazy_model_loader_host.md5
+	@echo "Контейнер: $$(cat /tmp/lazy_model_loader_container.md5 2>/dev/null || echo 'нет')"
+	@echo "Хост     : $$(cat /tmp/lazy_model_loader_host.md5)"
+	@if cmp -s /tmp/lazy_model_loader_container.md5 /tmp/lazy_model_loader_host.md5; then \
+		echo "$(GREEN)✓ Файл ml/lazy_model_loader.py в контейнере и на хосте совпадают$(RESET)"; \
+	else \
+		echo "$(RED)❌ Файл ml/lazy_model_loader.py в контейнере и на хосте РАЗНЫЕ!$(RESET)"; \
+	fi
 # Makefile для управления OkypBot
 
 # Переменные
