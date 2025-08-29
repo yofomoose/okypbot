@@ -57,24 +57,9 @@ async def main():
     except Exception as e:
         logger.warning(f"Не удалось инициализировать БД: {e}")
     
-    # Инициализация бота и диспетчера (универсальная версия)
-    try:
-        # Пробуем aiogram 3.x
-        from aiogram.client.session.aiohttp import AioHTTPSession
-        import aiohttp
-
-        # Создаем сессию с увеличенными таймаутами
-        session = AioHTTPSession(
-            timeout=aiohttp.ClientTimeout(total=30, connect=10, sock_read=10)
-        )
-        bot = Bot(token=BOT_TOKEN, session=session)
-        logger.info("✅ Используется aiogram 3.x с кастомной сессией")
-
-    except ImportError:
-        # Fallback для других версий aiogram
-        logger.warning("⚠️ AioHTTPSession не найден, используем стандартную конфигурацию")
-        bot = Bot(token=BOT_TOKEN)
-        logger.info("✅ Используется стандартная конфигурация бота")
+    # Инициализация бота и диспетчера
+    bot = Bot(token=BOT_TOKEN)
+    logger.info("✅ Бот инициализирован")
 
     dp = Dispatcher(storage=MemoryStorage())
     
@@ -225,8 +210,6 @@ async def main():
                 await task
             except asyncio.CancelledError:
                 pass
-        
-        await bot.session.close()
         
         await bot.session.close()
 

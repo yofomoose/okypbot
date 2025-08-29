@@ -100,3 +100,10 @@ venv-resave/Scripts/pip3.11.exe
 venv-resave/Scripts/pip3.exe
 venv-resave/Scripts/python.exe
 venv-resave/Scripts/pythonw.exe
+train_on_new_data_fixed.py
+train_on_new_data.py
+docker/Dockerfile.alternative
+check_training_data.py
+check_training_examples.py
+create_new_model.py
+fix_ml_model.py
