@@ -6,7 +6,7 @@ httpx==0.25.2
 python-multipart==0.0.6
 
 # Telegram Bot
-aiogram==3.0.0
+aiogram==3.4.1
 
 # База данных
 sqlalchemy==2.0.20

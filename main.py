@@ -57,9 +57,10 @@ async def main():
     except Exception as e:
         logger.warning(f"Не удалось инициализировать БД: {e}")
     
-    # Инициализация бота и диспетчера
+    # Инициализация бота и диспетчера - ПРОСТАЯ ВЕРСИЯ БЕЗ AioHTTPSession
+    logger.info("Инициализация бота...")
     bot = Bot(token=BOT_TOKEN)
-    logger.info("✅ Бот инициализирован")
+    logger.info("✅ Бот инициализирован успешно")
 
     dp = Dispatcher(storage=MemoryStorage())
     
