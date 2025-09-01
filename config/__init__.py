@@ -16,6 +16,15 @@ WEBHOOK_ENABLED = os.getenv("WEBHOOK_ENABLED", "false").lower() == "true"
 WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "0.0.0.0")
 WEBHOOK_PORT = int(os.getenv("WEBHOOK_PORT", "8001"))
 
+# Настройки для Okdesk API
+OKDESK_AUTHOR_ID = os.getenv("OKDESK_AUTHOR_ID")  # Фиксированный author_id для комментариев
+if OKDESK_AUTHOR_ID:
+    try:
+        OKDESK_AUTHOR_ID = int(OKDESK_AUTHOR_ID)
+    except ValueError:
+        print("⚠️ Ошибка в настройке OKDESK_AUTHOR_ID в .env файле")
+        OKDESK_AUTHOR_ID = None
+
 # Админы для ML обратной связи
 ADMIN_IDS = []
 admin_ids_str = os.getenv("ADMIN_IDS", "")

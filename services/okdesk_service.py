@@ -89,90 +89,102 @@ class OkdeskService:
             # Пробуем разные endpoints для получения текущего пользователя
             endpoints = [
                 "/api/v1/employees/me",
-                "/api/v1/users/me", 
+                "/api/v1/users/me",
                 "/api/v1/me",
-                "/api/v1/employees"  # Получим список и возьмем первого
+                "/api/v1/employees",  # Получим список и возьмем первого
+                "/api/v1/users"  # Альтернативный endpoint для пользователей
             ]
-            
+
             for endpoint in endpoints:
                 try:
                     url = f"{self.base_url}{endpoint}"
                     params = {'api_token': self.api_key}
-                    
-                    logger.debug(f"Пробуем endpoint: {endpoint}")
+
+                    logger.info(f"Пробуем получить пользователя через endpoint: {endpoint}")
                     async with self.session.get(url, params=params) as response:
+                        logger.info(f"Ответ от {endpoint}: статус {response.status}")
+
                         if response.status == 200:
                             data = await response.json()
-                            logger.info(f"Получены данные пользователя через {endpoint}")
-                            
+                            logger.info(f"Получены данные от {endpoint}: {type(data)}")
+
                             # Если это список (как /employees), берем первого
                             if isinstance(data, list) and len(data) > 0:
                                 user = data[0]
-                                logger.info(f"Выбран первый пользователь из списка: {user.get('id', 'Unknown')}")
+                                logger.info(f"Выбран первый пользователь из списка: ID={user.get('id', 'Unknown')}, Name={user.get('name', 'Unknown')}")
                                 return user
                             elif isinstance(data, dict):
-                                logger.info(f"Получен пользователь: {data.get('id', 'Unknown')}")
+                                logger.info(f"Получен пользователь: ID={data.get('id', 'Unknown')}, Name={data.get('name', 'Unknown')}")
                                 return data
                             else:
-                                logger.warning(f"Неожиданный формат данных от {endpoint}: {type(data)}")
+                                logger.warning(f"Неожиданный формат данных от {endpoint}: {type(data)} - {data}")
                         else:
-                            logger.debug(f"Endpoint {endpoint} вернул {response.status}")
-                            
+                            response_text = await response.text()
+                            logger.warning(f"Endpoint {endpoint} вернул статус {response.status}: {response_text}")
+
                 except Exception as endpoint_error:
-                    logger.warning(f"Ошибка при запросе к {endpoint}: {endpoint_error}")
+                    logger.error(f"Ошибка при запросе к {endpoint}: {endpoint_error}")
                     continue
-            
-            logger.warning("Не удалось получить данные пользователя через все endpoints")
+
+            logger.error("Не удалось получить данные пользователя через все доступные endpoints")
             return None
-            
+
         except Exception as e:
-            logger.error(f"Ошибка получения данных пользователя: {e}")
+            logger.error(f"Критическая ошибка получения данных пользователя: {e}")
             return None
     
-    async def add_comment_to_issue(self, issue_id: int, comment_text: str, 
+    async def add_comment_to_issue(self, issue_id: int, comment_text: str,
                                  is_public: bool = True, author_id: int = None) -> bool:
         """Добавляет комментарий к заявке
-        
+
         Args:
             issue_id: ID заявки
             comment_text: Текст комментария
             is_public: Публичный ли комментарий
             author_id: ID автора комментария (опционально)
-            
+
         Returns:
             True если комментарий добавлен успешно
         """
         try:
             url = f"{self.base_url}/api/v1/issues/{issue_id}/comments"
-            
+
             data = {
                 "comment": {
                     "content": comment_text,
                     "public": is_public
                 }
             }
-            
+
             # Добавляем author_id если указан
             if author_id:
                 data["comment"]["author_id"] = author_id
+                logger.info(f"Используем указанный author_id: {author_id}")
             else:
-                # Пробуем получить текущего пользователя API
-                logger.info("Пытаемся получить текущего пользователя API для author_id")
-                current_user = await self.get_current_user()
-                if current_user and isinstance(current_user, dict) and 'id' in current_user:
-                    data["comment"]["author_id"] = current_user['id']
-                    logger.info(f"Используем ID текущего API пользователя: {current_user['id']}")
+                # Сначала пробуем использовать фиксированный author_id из конфигурации
+                from config import OKDESK_AUTHOR_ID
+                if OKDESK_AUTHOR_ID:
+                    data["comment"]["author_id"] = OKDESK_AUTHOR_ID
+                    logger.info(f"Используем фиксированный author_id из конфигурации: {OKDESK_AUTHOR_ID}")
                 else:
-                    logger.warning("Не удалось получить author_id, отправляем запрос без него")
-                    # Убираем author_id из данных, возможно API позволит создать комментарий без него
-                    pass  # Не добавляем author_id
-            
+                    # Пробуем получить текущего пользователя API
+                    logger.info("Пытаемся получить текущего пользователя API для author_id")
+                    current_user = await self.get_current_user()
+                    if current_user and isinstance(current_user, dict) and 'id' in current_user:
+                        data["comment"]["author_id"] = current_user['id']
+                        logger.info(f"Используем ID текущего API пользователя: {current_user['id']}")
+                    else:
+                        logger.warning("Не удалось получить author_id, пробуем создать комментарий без него")
+                        # Некоторые API позволяют создавать комментарии без author_id
+                        # Попробуем отправить запрос без author_id с самого начала
+                        pass
+
             # Добавляем API токен в параметры запроса
             params = {'api_token': self.api_key}
-            
+
             logger.info(f"Отправляем запрос на добавление комментария к заявке {issue_id}")
             logger.debug(f"Данные запроса: {data}")
-            
+
             async with self.session.post(url, json=data, params=params) as response:
                 if response.status in [200, 201]:  # Принимаем и 200, и 201 как успешные
                     logger.info(f"Комментарий успешно добавлен к заявке {issue_id}")
@@ -180,13 +192,13 @@ class OkdeskService:
                 else:
                     error_text = await response.text()
                     logger.error(f"Ошибка добавления комментария: {response.status} - {error_text}")
-                    
+
                     # Если ошибка 422 с author_id, попробуем без него
                     if response.status == 422 and "author_id" in error_text:
                         logger.warning("Повторяем запрос без author_id")
                         if "author_id" in data["comment"]:
                             del data["comment"]["author_id"]
-                        
+
                         async with self.session.post(url, json=data, params=params) as retry_response:
                             if retry_response.status in [200, 201]:
                                 logger.info(f"Комментарий успешно добавлен к заявке {issue_id} (без author_id)")
