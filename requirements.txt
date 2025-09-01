@@ -1,7 +1,7 @@
 # Основные зависимости (финальные совместимые версии)
 fastapi==0.100.1
 uvicorn[standard]==0.23.2
-pydantic==2.3.0
+pydantic>=2.4.1,<2.6
 httpx==0.25.2
 python-multipart==0.0.6
 
