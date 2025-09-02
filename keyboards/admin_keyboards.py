@@ -319,6 +319,28 @@ def get_admin_ml_keyboard() -> InlineKeyboardMarkup:
     
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
+def get_admin_menu_keyboard() -> InlineKeyboardMarkup:
+    """Главное меню администратора"""
+    buttons = [
+        [
+            InlineKeyboardButton(text="📊 Статистика", callback_data="admin_stats"),
+            InlineKeyboardButton(text="👥 Пользователи", callback_data="admin_users")
+        ],
+        [
+            InlineKeyboardButton(text="🤖 ML Модели", callback_data="admin_ml"),
+            InlineKeyboardButton(text="🎫 Заявки", callback_data="admin_issues")
+        ],
+        [
+            InlineKeyboardButton(text="⚙️ Настройки", callback_data="admin_settings"),
+            InlineKeyboardButton(text="📋 Логи", callback_data="admin_logs")
+        ],
+        [
+            InlineKeyboardButton(text="🔙 Главное меню", callback_data="main_menu")
+        ]
+    ]
+    
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
 def get_model_selection_keyboard() -> InlineKeyboardMarkup:
     """Клавиатура для выбора активной модели"""
     buttons = [

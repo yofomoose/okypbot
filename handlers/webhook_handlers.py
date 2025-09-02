@@ -12,14 +12,15 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-webhook_router = Router()
+# Создаем роутер (экспортируется как router)
+router = Router()
 
 class ReplyStates(StatesGroup):
     waiting_for_reply = State()
     waiting_for_specialist_reply = State()
 
 # Обработчики для клиентов
-@webhook_router.callback_query(F.data.startswith("client_reply_"))
+@router.callback_query(F.data.startswith("client_reply_"))
 async def handle_client_reply(callback: CallbackQuery, state: FSMContext):
     """Обработка ответа клиента на заявку"""
     try:
@@ -38,7 +39,7 @@ async def handle_client_reply(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка обработки ответа клиента: {e}")
         await callback.answer("❌ Произошла ошибка", show_alert=True)
 
-@webhook_router.message(ReplyStates.waiting_for_reply)
+@router.message(ReplyStates.waiting_for_reply)
 async def process_client_reply(message: Message, state: FSMContext):
     """Обработка текста ответа от клиента"""
     try:
@@ -84,7 +85,7 @@ async def process_client_reply(message: Message, state: FSMContext):
         )
         await state.clear()
 
-@webhook_router.callback_query(F.data.startswith("issue_details_"))
+@router.callback_query(F.data.startswith("issue_details_"))
 async def handle_issue_details(callback: CallbackQuery):
     """Показать детали заявки"""
     try:
@@ -128,7 +129,7 @@ async def handle_issue_details(callback: CallbackQuery):
         logger.error(f"Ошибка получения деталей заявки: {e}")
         await callback.answer("❌ Произошла ошибка", show_alert=True)
 
-@webhook_router.callback_query(F.data.startswith("close_issue_"))
+@router.callback_query(F.data.startswith("close_issue_"))
 async def handle_close_issue(callback: CallbackQuery):
     """Закрытие заявки клиентом"""
     try:
@@ -155,7 +156,7 @@ async def handle_close_issue(callback: CallbackQuery):
         await callback.answer("❌ Произошла ошибка", show_alert=True)
 
 # Обработчики для специалистов
-@webhook_router.callback_query(F.data.startswith("specialist_reply_"))
+@router.callback_query(F.data.startswith("specialist_reply_"))
 async def handle_specialist_reply(callback: CallbackQuery, state: FSMContext):
     """Обработка ответа специалиста на заявку"""
     try:
@@ -176,7 +177,7 @@ async def handle_specialist_reply(callback: CallbackQuery, state: FSMContext):
         logger.error(f"Ошибка обработки ответа специалиста: {e}")
         await callback.answer("❌ Произошла ошибка", show_alert=True)
 
-@webhook_router.message(ReplyStates.waiting_for_specialist_reply)
+@router.message(ReplyStates.waiting_for_specialist_reply)
 async def process_specialist_reply(message: Message, state: FSMContext):
     """Обработка текста ответа от специалиста"""
     try:
@@ -217,7 +218,7 @@ async def process_specialist_reply(message: Message, state: FSMContext):
         await message.answer("❌ Произошла ошибка при отправке ответа")
         await state.clear()
 
-@webhook_router.callback_query(F.data.startswith("resolve_issue_"))
+@router.callback_query(F.data.startswith("resolve_issue_"))
 async def handle_resolve_issue(callback: CallbackQuery):
     """Решение заявки специалистом"""
     try:
@@ -240,7 +241,7 @@ async def handle_resolve_issue(callback: CallbackQuery):
         logger.error(f"Ошибка решения заявки: {e}")
         await callback.answer("❌ Произошла ошибка", show_alert=True)
 
-@webhook_router.callback_query(F.data.startswith("change_status_"))
+@router.callback_query(F.data.startswith("change_status_"))
 async def handle_change_status_menu(callback: CallbackQuery):
     """Показать меню изменения статуса"""
     try:
@@ -257,7 +258,7 @@ async def handle_change_status_menu(callback: CallbackQuery):
         logger.error(f"Ошибка показа меню статуса: {e}")
         await callback.answer("❌ Произошла ошибка", show_alert=True)
 
-@webhook_router.callback_query(F.data.startswith("set_status_"))
+@router.callback_query(F.data.startswith("set_status_"))
 async def handle_set_status(callback: CallbackQuery):
     """Установка нового статуса заявки"""
     try:
