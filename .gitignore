@@ -1,149 +1,111 @@
-# Игнорируемые файлы для Git
-
-# Переменные окружения
-.env
-.env.*
-.env.production
-.env.development
-.env.local
-config.py
-
-# Python
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+*.dll
+*.dylib
 
-# Виртуальные окружения
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+coverage.xml
+*.cover
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IPython
+profile_default/
+ipython_config.py
+
+# pyenv
+.python-version
+
+# pipenv
+Pipfile.lock
+
+# virtualenv
 venv/
 env/
 ENV/
-env.bak/
-venv.bak/
+venv-resave/
 
-# IDE
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.json
+
+# Pyre type checker
+.pyre/
+
+# VS Code
 .vscode/
-.idea/
-*.swp
-*.swo
-*~
+*.code-workspace
 
-# Логи
-*.log
+# PyCharm
+.idea/
+*.iml
+*.iws
+*.ipr
+
+# Database
+*.sqlite3
+*.db-journal
+
+# Backups
+backups/
+database_backup/
+*.bak
+
+# Local configuration
+.env
+.env.local
+
+# Logs
 logs/
 
-# Системные файлы
+# Temporary files
+tmp/
+temp/
 .DS_Store
 Thumbs.db
-
-# Временные файлы
-*.tmp
-*.temp
-
-# База данных SQLite
-*.db
-*.sqlite
-*.sqlite3
-
-# ML модели и данные
-ml/models/*.pkl
-ml/models/*.txt
-ml/models/backups/
-ml/models/training_examples.pkl
-ml/models/cache/
-ml/trained/
-bot_model/training_examples.pkl
-bot_model/classifier_backup*.pkl
-cache/
-SENTENCE_TRANSFORMERS_CACHE/
-TRANSFORMERS_CACHE/
-HUGGINGFACE_HUB_CACHE/
-
-# Документы статуса разработки
-*_SUCCESS.md
-*_COMPLETE.md
-PROJECT_STATUS.md
-FIXES.md
-
-# Тестовые файлы и результаты тестов
-test_*.py
-debug_*.py
-diagnose_*.py
-analyze_*.py
-quick_test.py
-webhook_test_results.json
-check_model_issues.py
-check_db.py
-
-# Логи тестов
-test_*.log
-test_*.txt
-
-# JSON файлы с данными пользователей
-database/users.json
-database/user_issues.json
-
-# Скрипты настройки (могут содержать чувствительные данные)
-scripts/setup_local.py
-scripts/model_resave/requirements_resave.txt
-
-# Виртуальные окружения и связанные файлы
-venv-resave/
-**/pyvenv.cfg
-**/Scripts/activate
-**/Scripts/activate.bat
-**/Scripts/Activate.ps1
-**/Scripts/deactivate.bat
-**/Scripts/*.exe
-
-# Docker файлы с секретами
-docker/.env
-venv-resave/Scripts/python.exe
-venv-resave/Scripts/pythonw.exe
-train_on_new_data_fixed.py
-train_on_new_data.py
-docker/Dockerfile.alternative
-check_training_data.py
-check_training_examples.py
-create_new_model.py
-fix_ml_model.py
-
-# Резервные копии и временные файлы
-*.bak
-*.backup
-Makefile.bak
-Makefile.new
-
-# Локальные скрипты проверки
-check_*_status.sh
-check_docker_config.ps1
-monitor_webhook_logs.sh
-test_fixed_model.py
-test_ml_training*.py
-test_okdesk_connection.py
-test_webhook.py
-test_bot_model_integration.py
-
-# Временные файлы решения проблем
-fix_aiogram_config.py
-fix_container_aiogram.py
-fix_database_issues.py
-fix_system_issues.sh

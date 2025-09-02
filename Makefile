@@ -1,15 +1,7 @@
 # Проверка синхронизации кода ML между хостом и контейнером
 check-ml-sync:
-	@echo "🔍 Проверка актуальности ml/lazy_model_loader.py в контейнере..."
-	@docker exec $(CONTAINER_BOT) md5sum /app/ml/lazy_model_loader.py > /tmp/lazy_model_loader_container.md5 || echo "(нет файла в контейнере)"
-	@md5sum ml/lazy_model_loader.py > /tmp/lazy_model_loader_host.md5
-	@echo "Контейнер: $$(cat /tmp/lazy_model_loader_container.md5 2>/dev/null || echo 'нет')"
-	@echo "Хост     : $$(cat /tmp/lazy_model_loader_host.md5)"
-	@if cmp -s /tmp/lazy_model_loader_container.md5 /tmp/lazy_model_loader_host.md5; then \
-		echo "$(GREEN)✓ Файл ml/lazy_model_loader.py в контейнере и на хосте совпадают$(RESET)"; \
-	else \
-		echo "$(RED)❌ Файл ml/lazy_model_loader.py в контейнере и на хосте РАЗНЫЕ!$(RESET)"; \
-	fi
+	@chmod +x scripts/check_ml_sync.sh
+	@./scripts/check_ml_sync.sh
 # Makefile для управления OkypBot
 
 # Переменные
@@ -63,6 +55,11 @@ help:
 	@echo "  make clean        - Очистка неиспользуемых ресурсов"
 	@echo "  make clean-all    - Полная очистка с остановкой"
 	@echo "  make disk-usage   - Анализ использования диска"
+	@echo ""
+	@echo "$(YELLOW)Диагностика:$(RESET)"
+	@echo "  make check-system       - Проверка версии и состояния системы"
+	@echo "  make check-compatibility - Проверка совместимости компонентов"
+	@echo "  make check-ml-sync      - Проверка синхронизации кода ML"
 	@echo ""
 	@echo "🔧 Используется: $(DOCKER_COMPOSE)"
 
@@ -217,11 +214,13 @@ update:
 # ML модель
 check-ml:
 	@echo "🔍 Проверка ML модели..."
-	@docker exec $(CONTAINER_BOT) python -c "from ml.classifier import TextClassifier; print('ML модель работает' if TextClassifier().is_ready() else 'ML модель не готова')"
+	@chmod +x scripts/check_ml_model.sh
+	@./scripts/check_ml_model.sh
 
 train-ml:
 	@echo "🧠 Запуск обучения ML модели..."
-	@docker exec $(CONTAINER_BOT) python -m ml.trainer
+	@chmod +x scripts/train_ml_model.sh
+	@./scripts/train_ml_model.sh
 
 # Обслуживание
 clean:
@@ -252,4 +251,17 @@ disk-usage:
 	@echo "📊 Использование диска Docker:"
 	@docker system df -v
 
-.PHONY: help setup deploy update start stop restart rebuild logs logs-bot logs-db status backup restore check-db check-ml train-ml clean clean-all disk-usage
+# Проверка системы
+check-system:
+	@echo "🔍 Проверка системы..."
+	@chmod +x scripts/check_system.sh
+	@./scripts/check_system.sh
+
+check-compatibility:
+	@echo "🔍 Проверка совместимости компонентов..."
+	@python scripts/check_compatibility.py
+
+.PHONY: help setup deploy update start stop restart rebuild logs logs-bot logs-db status backup restore check-db check-ml train-ml clean clean-all disk-usage backup-data restore-data update-safe rebuild-safe fix-persistence help-persistence check-ml-sync check-system check-compatibility
+
+# Включение модуля сохранения данных при пересборке контейнеров
+include persistence.mk
