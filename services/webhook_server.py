@@ -279,10 +279,48 @@ class WebhookHandler:
     async def get_client_telegram_id(self, issue_id: int) -> Optional[int]:
         """Получить Telegram ID клиента по ID заявки"""
         try:
-            # Временная заглушка для тестирования
-            # TODO: Реализовать получение данных из Okdesk API
             logger.info(f"Поиск клиента для заявки {issue_id}")
-            return None  # Для тестирования возвращаем None
+            
+            # Ищем пользователя, связанного с данной заявкой
+            # 1. Проверяем в записях UserIssue (связь заявок с пользователями)
+            active_issues = await db.get_active_user_issues()
+            for issue_record in active_issues:
+                if issue_record['issue_id'] == issue_id:
+                    user_id = issue_record['user_id']
+                    logger.info(f"Найден пользователь {user_id} для заявки {issue_id} в активных заявках")
+                    return user_id
+            
+            # 2. Проверяем все зарегистрированные заявки в профилях пользователей
+            for telegram_id, user in db.users.items():
+                if user.okdesk_issue_id == issue_id:
+                    logger.info(f"Найден пользователь {telegram_id} для заявки {issue_id} в профилях")
+                    return telegram_id
+            
+            # Если не нашли, запрашиваем данные из Okdesk API
+            try:
+                issue_data = await self.okdesk_api.get_issue(issue_id)
+                if issue_data:
+                    # Ищем контакт в данных заявки
+                    contact_id = None
+                    contacts_data = issue_data.get('contacts', [])
+                    if contacts_data:
+                        contact_id = contacts_data[0].get('id')
+                    
+                    if contact_id:
+                        # Ищем пользователя с таким okdesk_contact_id
+                        for telegram_id, user in db.users.items():
+                            if user.okdesk_contact_id == contact_id:
+                                logger.info(f"Найден пользователь {telegram_id} по contact_id {contact_id}")
+                                
+                                # Сохраняем связь для будущих запросов
+                                await db.add_user_issue_for_monitoring(issue_id, telegram_id)
+                                
+                                return telegram_id
+            except Exception as api_error:
+                logger.error(f"Ошибка при запросе данных из Okdesk API: {api_error}")
+            
+            logger.warning(f"Клиент не найден для заявки {issue_id}")
+            return None
             
         except Exception as e:
             logger.error(f"Ошибка получения telegram_id клиента: {e}")
@@ -291,10 +329,34 @@ class WebhookHandler:
     async def get_specialist_telegram_id(self, issue_id: int) -> Optional[int]:
         """Получить Telegram ID специалиста по ID заявки"""
         try:
-            # Временная заглушка для тестирования
-            # TODO: Реализовать получение данных из Okdesk API
             logger.info(f"Поиск специалиста для заявки {issue_id}")
-            return None  # Для тестирования возвращаем None
+            
+            # Получаем информацию о заявке из Okdesk API
+            try:
+                issue_data = await self.okdesk_api.get_issue(issue_id)
+                if issue_data:
+                    # Получаем ID ответственного
+                    assignee = issue_data.get('assignee', {})
+                    assignee_id = assignee.get('id')
+                    
+                    if assignee_id:
+                        # Ищем специалиста в настройках админов
+                        from config import ADMIN_IDS
+                        
+                        # Временная логика - отправляем первому админу
+                        # TODO: Реализовать mapping между сотрудниками Okdesk и Telegram ID
+                        if ADMIN_IDS:
+                            try:
+                                admin_id = int(ADMIN_IDS.split(',')[0])
+                                logger.info(f"Используем первого админа {admin_id} для уведомлений специалисту")
+                                return admin_id
+                            except (ValueError, IndexError):
+                                logger.error("Не удалось получить ID администратора")
+            except Exception as api_error:
+                logger.error(f"Ошибка при запросе данных из Okdesk API: {api_error}")
+            
+            logger.warning(f"Специалист не найден для заявки {issue_id}")
+            return None
             
         except Exception as e:
             logger.error(f"Ошибка получения telegram_id специалиста: {e}")
