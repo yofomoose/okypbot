@@ -4,26 +4,28 @@
 from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 def get_specialist_reply_keyboard(issue_id: int) -> InlineKeyboardMarkup:
-    """Клавиатура для ответа специалиста"""
+    """Клавиатура для ответа специалиста на заявку"""
     return InlineKeyboardMarkup(inline_keyboard=[
         [
             InlineKeyboardButton(
-                text="💬 Ответить", 
-                callback_data=f"specialist_reply_{issue_id}"
-            ),
-            InlineKeyboardButton(
-                text="📋 Детали", 
-                callback_data=f"issue_details_{issue_id}"
+                text="💬 Ответить клиенту",
+                callback_data=f"reply_to_issue:{issue_id}"
             )
         ],
         [
             InlineKeyboardButton(
-                text="✅ Решено", 
-                callback_data=f"resolve_issue_{issue_id}"
+                text="📋 Открыть заявку",
+                url=f"https://your-company.okdesk.ru/issues/{issue_id}"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                text="✅ Закрыть заявку",
+                callback_data=f"close_issue:{issue_id}"
             ),
             InlineKeyboardButton(
-                text="🔄 Статус", 
-                callback_data=f"change_status_{issue_id}"
+                text="🔄 Обновить статус",
+                callback_data=f"update_status:{issue_id}"
             )
         ]
     ])

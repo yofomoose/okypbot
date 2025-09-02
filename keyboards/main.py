@@ -160,21 +160,21 @@ def get_issue_reply_keyboard(issue_id: int) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 text="💬 Ответить", 
-                callback_data=f"client_reply_{issue_id}"
+                callback_data=f"client_reply:{issue_id}"
             ),
             InlineKeyboardButton(
                 text="📋 Детали заявки", 
-                callback_data=f"issue_details_{issue_id}"
+                callback_data=f"issue_details:{issue_id}"
             )
         ],
         [
             InlineKeyboardButton(
                 text="✅ Закрыть заявку", 
-                callback_data=f"close_issue_{issue_id}"
+                callback_data=f"close_issue:{issue_id}"
             ),
             InlineKeyboardButton(
                 text="🔙 Главное меню", 
-                callback_data="menu"
+                callback_data="main_menu"
             )
         ]
     ])

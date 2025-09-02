@@ -175,10 +175,29 @@ class TextClassifier:
             
             # Сохраняем обновленные примеры
             try:
+                # Убеждаемся, что директория существует и доступна для записи
+                examples_path.parent.mkdir(exist_ok=True)
+                
+                # Проверяем права доступа и пытаемся сохранить
                 with open(examples_path, 'wb') as f:
                     pickle.dump(examples, f)
                 logger.info(f"Сохранен новый обучающий пример (всего {len(examples)})")
                 return True
+            except PermissionError as e:
+                logger.error(f"Нет прав доступа для записи в {examples_path}: {e}")
+                # Попробуем сохранить во временную директорию
+                try:
+                    import tempfile
+                    temp_dir = Path(tempfile.gettempdir()) / "okypbot_examples"
+                    temp_dir.mkdir(exist_ok=True)
+                    temp_path = temp_dir / "training_examples.pkl"
+                    with open(temp_path, 'wb') as f:
+                        pickle.dump(examples, f)
+                    logger.warning(f"Сохранено во временную директорию: {temp_path}")
+                    return True
+                except Exception as temp_e:
+                    logger.error(f"Не удалось сохранить даже во временную директорию: {temp_e}")
+                    return False
             except Exception as e:
                 logger.error(f"Ошибка сохранения примеров: {e}")
                 return False

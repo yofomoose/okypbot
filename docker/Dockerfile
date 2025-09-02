@@ -10,9 +10,13 @@ ENV PYTHONUNBUFFERED=1 \
     PIP_ROOT_USER_ACTION=ignore \
     PATH="/opt/venv/bin:$PATH"
 
-# Создаем пользователя
+# Создаем пользователя с правильными UID/GID
 RUN groupadd --gid 1000 app && \
     useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash app
+
+# Создаем рабочие директории с правильными правами
+RUN mkdir -p /app/bot_model /app/logs /app/data /tmp/okypbot_models && \
+    chown -R app:app /app /tmp/okypbot_models
 
 # Установка зависимостей
 FROM base AS builder
@@ -98,7 +102,7 @@ RUN apt-get update && \
     liblapack-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Создаем все нужные директории
+# Создаем все нужные директории с расширенными правами
 RUN mkdir -p \
     /app/data \
     /app/logs \
@@ -109,8 +113,10 @@ RUN mkdir -p \
     /app/bot_model \
     /app/temp \
     /app/cache \
-    && chown -R app:app /app \
-    && chmod -R 755 /app
+    /tmp/okypbot_examples \
+    && chown -R app:app /app /tmp/okypbot_examples \
+    && chmod -R 755 /app \
+    && chmod -R 777 /app/bot_model /app/logs /app/data /tmp/okypbot_examples
 
 WORKDIR /app
 
@@ -120,9 +126,14 @@ COPY --chown=app:app . .
 # Проверяем наличие файлов модели и устанавливаем правильные права
 RUN ls -la /app/bot_model/ || true && \
     chown -R app:app /app/bot_model && \
-    chmod -R 755 /app/bot_model && \
-    # Проверяем наличие training_examples.pkl если он есть
-    if [ -f /app/bot_model/training_examples.pkl ]; then echo "Training data found"; else echo "Training data not found (optional)"; fi
+    chmod -R 777 /app/bot_model && \
+    # Создаем файл training_examples.pkl с правильными правами если его нет
+    if [ ! -f /app/bot_model/training_examples.pkl ]; then \
+        echo "Creating empty training examples file" && \
+        touch /app/bot_model/training_examples.pkl && \
+        chown app:app /app/bot_model/training_examples.pkl && \
+        chmod 666 /app/bot_model/training_examples.pkl; \
+    fi
 
 
 # Проверка наличия numpy в venv
