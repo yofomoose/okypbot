@@ -14,7 +14,7 @@ from aiogram import Bot
 from config import BOT_TOKEN, OKDESK_WEBHOOK_SECRET, OKDESK_API_TOKEN, OKDESK_BASE_URL
 from database.models import db
 from api.okdesk_api import OkdeskAPI
-from services.security import IPSecurityMiddleware
+# Удален импорт отсутствующего модуля: from services.security import IPSecurityMiddleware
 
 logger = logging.getLogger(__name__)
 
