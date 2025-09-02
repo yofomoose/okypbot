@@ -1,0 +1,142 @@
+services:
+  # PostgreSQL база данных
+  postgres:
+    image: postgres:15-alpine
+    container_name: okypbot_postgres
+    environment:
+      POSTGRES_DB: okypbot
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - postgres_backup:/var/lib/postgresql/backup
+    ports:
+      - "5433:5432"  # Внешний:Внутренний
+    restart: unless-stopped
+    networks:
+      - okypbot-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d okypbot"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+
+  # Telegram бот + Webhook сервер
+  okypbot:
+    build: 
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: production
+    image: okypbot:latest
+    container_name: okypbot_app
+    environment:
+      BOT_TOKEN: ${BOT_TOKEN}
+      OKDESK_API_TOKEN: ${OKDESK_API_TOKEN}
+      OKDESK_BASE_URL: ${OKDESK_BASE_URL}
+      OKDESK_WEBHOOK_SECRET: ${OKDESK_WEBHOOK_SECRET}
+      # PostgreSQL настройки - ВАЖНО: используем внутренний хост и порт
+      DB_HOST: postgres
+      DB_PORT: 5432  # Внутренний порт контейнера PostgreSQL
+      DB_NAME: okypbot
+      DB_USER: postgres
+      DB_PASSWORD: ${DB_PASSWORD}
+      # Webhook настройки
+      WEBHOOK_ENABLED: 'true'
+      WEBHOOK_HOST: 0.0.0.0
+      WEBHOOK_PORT: 8001  # Согласованно с .env.production
+      ADMIN_IDS: ${ADMIN_IDS}
+      # Оптимизация Python
+      PYTHONUNBUFFERED: 1
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONHASHSEED: random
+      PIP_NO_CACHE_DIR: 1
+      PIP_DISABLE_PIP_VERSION_CHECK: 1
+      PYTHONPATH: /app
+      BOT_MODEL_DIR: /app/bot_model
+      # ML настройки для производительности
+      SENTENCE_TRANSFORMERS_CACHE: /app/cache
+      TRANSFORMERS_CACHE: /app/cache
+      HUGGINGFACE_HUB_CACHE: /app/cache
+      # NumPy настройки для многопоточности
+      OPENBLAS_NUM_THREADS: 1
+      MKL_NUM_THREADS: 1
+      NUMEXPR_NUM_THREADS: 1
+      OMP_NUM_THREADS: 1
+      NUMPY_EXPERIMENTAL_ARRAY_FUNCTION: 0
+    command: python main.py
+    volumes:
+      - ../bot_model:/app/bot_model
+      - ml_data:/app/ml
+      - bot_logs:/app/logs
+      - bot_data:/app/data
+      - database_data:/app/database
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - okypbot-net
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8001/health', timeout=5)"]
+      interval: 20s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+        reservations:
+          memory: 1G
+          cpus: '1.0'
+    security_opt:
+      - no-new-privileges:true
+    user: "1000:1000"
+
+  # nginx прокси
+  nginx:
+    image: nginx:alpine
+    container_name: okypbot_nginx
+    ports:
+      - "8080:80"
+    volumes:
+      - ../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - okypbot
+    networks:
+      - okypbot-net
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  postgres_data:
+  postgres_backup:
+  ml_data:
+  bot_logs:
+  bot_data:
+  database_data:
+  nginx_logs:
+
+networks:
+  okypbot-net:
+    driver: bridge
+    driver_opts:
+      com.docker.network.bridge.name: okypbot-br
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
