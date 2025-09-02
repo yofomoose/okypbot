@@ -1,23 +1,29 @@
 """
 Webhook сервер для получения уведомлений от okdesk
 """
-from fastapi import FastAPI, Request, HTTPException
+from fastapi import FastAPI, Request, HTTPException, Depends
 from fastapi.responses import JSONResponse
 import asyncio
 import json
 import logging
 import hashlib
 import hmac
+import os
 from typing import Dict, Any, Optional
 from aiogram import Bot
 from config import BOT_TOKEN, OKDESK_WEBHOOK_SECRET, OKDESK_API_TOKEN, OKDESK_BASE_URL
 from database.models import db
 from api.okdesk_api import OkdeskAPI
+from services.security import IPSecurityMiddleware
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Okdesk Webhook Handler")
 bot = Bot(token=BOT_TOKEN)
+
+# Проверка IP отключена
+# allowed_ips = [ip.strip() for ip in os.environ.get('ALLOWED_WEBHOOK_IPS', '').split(',') if ip.strip()]
+# ip_security = IPSecurityMiddleware(allowed_ips)
 
 class WebhookHandler:
     """Обработчик webhook событий от okdesk"""
@@ -365,6 +371,13 @@ class WebhookHandler:
 # Создаем глобальный экземпляр обработчика
 webhook_handler = WebhookHandler()
 
+# Проверка IP отключена
+# async def check_ip_security(request: Request):
+#     """Зависимость для проверки IP-адреса"""
+#     if not await ip_security.check_ip(request):
+#         raise HTTPException(status_code=403, detail="Access denied: IP not allowed")
+#     return True
+
 @app.post("/okdesk-webhook")
 async def handle_okdesk_webhook(request: Request):
     """Основной эндпоинт для получения webhooks от okdesk"""
@@ -372,10 +385,7 @@ async def handle_okdesk_webhook(request: Request):
         # Получаем тело запроса
         body = await request.body()
         
-        # Проверяем подпись (если настроена)
-        signature = request.headers.get('X-Okdesk-Signature', '')
-        if not await webhook_handler.verify_signature(body, signature):
-            raise HTTPException(status_code=401, detail="Invalid signature")
+        # Примечание: Согласно документации OkDesk, вебхуки не используют подпись и не требуют проверки IP
         
         # Парсим JSON
         try:
