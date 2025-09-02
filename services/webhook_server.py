@@ -346,15 +346,26 @@ class WebhookHandler:
                     assignee_id = assignee.get('id')
                     
                     if assignee_id:
-                        # Ищем специалиста в настройках админов
+                        # Используем систему сопоставления сотрудников
+                        from services.employee_mapping import EmployeeMappingService
+                        
+                        # Создаем экземпляр сервиса маппинга
+                        mapping_service = EmployeeMappingService()
+                        
+                        # Ищем Telegram ID специалиста по его ID в OkDesk
+                        telegram_id = mapping_service.get_telegram_id(str(assignee_id))
+                        
+                        if telegram_id:
+                            logger.info(f"Найден Telegram ID {telegram_id} для сотрудника OkDesk {assignee_id}")
+                            return telegram_id
+                        
+                        # Если сопоставление не найдено, используем ID по умолчанию
                         from config import ADMIN_IDS
                         
-                        # Временная логика - отправляем первому админу
-                        # TODO: Реализовать mapping между сотрудниками Okdesk и Telegram ID
                         if ADMIN_IDS:
                             try:
                                 admin_id = int(ADMIN_IDS.split(',')[0])
-                                logger.info(f"Используем первого админа {admin_id} для уведомлений специалисту")
+                                logger.info(f"Сопоставление не найдено, используем админа {admin_id}")
                                 return admin_id
                             except (ValueError, IndexError):
                                 logger.error("Не удалось получить ID администратора")

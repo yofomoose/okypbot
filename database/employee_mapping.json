@@ -1,0 +1,9 @@
+{
+  "mapping": {
+    "12345": 987654321
+  },
+  "reverse_mapping": {
+    "987654321": "12345"
+  },
+  "default_employee_id": "12345"
+}

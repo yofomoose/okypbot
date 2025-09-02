@@ -9,12 +9,7 @@ import aiohttp
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
 from config import BOT_TOKEN, WEBHOOK_ENABLED, WEBHOOK_HOST, WEBHOOK_PORT
-from handlers.main import router as main_router
-from handlers.registration import router as registration_router
-from handlers.ml_handlers import router as ml_router
-from handlers.feedback_handlers import router as feedback_router
-from handlers.admin_stats import router as admin_router
-from handlers.webhook_handlers import webhook_router
+from handlers import setup_routers
 from services.issue_monitor import IssueStatusMonitor, set_monitor
 
 # Настройка логирования
@@ -133,30 +128,12 @@ async def main():
     except Exception as e:
         logger.error(f"Ошибка инициализации сервиса обучения: {e}")
     
-    # Подключение роутеров с обработчиками
-    dp.include_router(registration_router)  # Сначала регистрация
-    dp.include_router(feedback_router)  # Обратная связь по ML
-    
-    # Подключаем обработчики комментариев
+    # Подключение всех роутеров из модуля handlers
     try:
-        from handlers.comment_handlers import router as comment_router
-        dp.include_router(comment_router)
-        logger.info("Обработчики комментариев подключены")
-    except ImportError as e:
-        logger.warning(f"Обработчики комментариев недоступны: {e}")
-    
-    # Подключаем админ роутер
-    try:
-        from handlers.admin_handlers import router as admin_handlers_router
-        dp.include_router(admin_handlers_router)
-        logger.info("Админ обработчики подключены")
-    except ImportError as e:
-        logger.warning(f"Админ обработчики недоступны: {e}")
-    
-    dp.include_router(admin_router)  # Админ функции
-    dp.include_router(ml_router)  # ML функции
-    dp.include_router(webhook_router)  # Webhook функции
-    dp.include_router(main_router)  # Потом основные функции
+        setup_routers(dp)
+        logger.info("Все обработчики успешно подключены")
+    except Exception as e:
+        logger.error(f"Ошибка при подключении обработчиков: {e}")
     
     logger.info("Бот запущен")
     
