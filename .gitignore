@@ -2,6 +2,10 @@
 
 # Переменные окружения
 .env
+.env.*
+.env.production
+.env.development
+.env.local
 config.py
 
 # Python
@@ -64,6 +68,14 @@ ml/models/*.pkl
 ml/models/*.txt
 ml/models/backups/
 ml/models/training_examples.pkl
+ml/models/cache/
+ml/trained/
+bot_model/training_examples.pkl
+bot_model/classifier_backup*.pkl
+cache/
+SENTENCE_TRANSFORMERS_CACHE/
+TRANSFORMERS_CACHE/
+HUGGINGFACE_HUB_CACHE/
 
 # Документы статуса разработки
 *_SUCCESS.md
@@ -71,12 +83,15 @@ ml/models/training_examples.pkl
 PROJECT_STATUS.md
 FIXES.md
 
-# Тестовые файлы
+# Тестовые файлы и результаты тестов
 test_*.py
 debug_*.py
 diagnose_*.py
 analyze_*.py
 quick_test.py
+webhook_test_results.json
+check_model_issues.py
+check_db.py
 
 # Логи тестов
 test_*.log
@@ -89,15 +104,18 @@ database/user_issues.json
 # Скрипты настройки (могут содержать чувствительные данные)
 scripts/setup_local.py
 scripts/model_resave/requirements_resave.txt
-venv-resave/pyvenv.cfg
-venv-resave/Scripts/activate
-venv-resave/Scripts/activate.bat
-venv-resave/Scripts/Activate.ps1
-venv-resave/Scripts/deactivate.bat
-venv-resave/Scripts/f2py.exe
-venv-resave/Scripts/pip.exe
-venv-resave/Scripts/pip3.11.exe
-venv-resave/Scripts/pip3.exe
+
+# Виртуальные окружения и связанные файлы
+venv-resave/
+**/pyvenv.cfg
+**/Scripts/activate
+**/Scripts/activate.bat
+**/Scripts/Activate.ps1
+**/Scripts/deactivate.bat
+**/Scripts/*.exe
+
+# Docker файлы с секретами
+docker/.env
 venv-resave/Scripts/python.exe
 venv-resave/Scripts/pythonw.exe
 train_on_new_data_fixed.py
@@ -107,3 +125,25 @@ check_training_data.py
 check_training_examples.py
 create_new_model.py
 fix_ml_model.py
+
+# Резервные копии и временные файлы
+*.bak
+*.backup
+Makefile.bak
+Makefile.new
+
+# Локальные скрипты проверки
+check_*_status.sh
+check_docker_config.ps1
+monitor_webhook_logs.sh
+test_fixed_model.py
+test_ml_training*.py
+test_okdesk_connection.py
+test_webhook.py
+test_bot_model_integration.py
+
+# Временные файлы решения проблем
+fix_aiogram_config.py
+fix_container_aiogram.py
+fix_database_issues.py
+fix_system_issues.sh
