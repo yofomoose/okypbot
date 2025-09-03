@@ -14,7 +14,10 @@ OKDESK_WEBHOOK_SECRET = os.getenv("OKDESK_WEBHOOK_SECRET", "")  # Секрет �
 # Webhook настройки
 WEBHOOK_ENABLED = os.getenv("WEBHOOK_ENABLED", "false").lower() == "true"
 WEBHOOK_HOST = os.getenv("WEBHOOK_HOST", "0.0.0.0")
+# Принудительно устанавливаем порт 8001 для production
 WEBHOOK_PORT = int(os.getenv("WEBHOOK_PORT", "8001"))
+if WEBHOOK_PORT == 8000:  # Если по какой-то причине установлен 8000, меняем на 8001
+    WEBHOOK_PORT = 8001
 
 # Настройки для Okdesk API
 OKDESK_AUTHOR_ID = os.getenv("OKDESK_AUTHOR_ID")  # Фиксированный author_id для комментариев
