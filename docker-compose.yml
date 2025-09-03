@@ -36,7 +36,7 @@ services:
   # Telegram бот + Webhook сервер
   okypbot:
     build: 
-      context: ..
+      context: .
       dockerfile: docker/Dockerfile
       target: production
     image: okypbot:latest
@@ -52,10 +52,10 @@ services:
       DB_NAME: okypbot
       DB_USER: postgres
       DB_PASSWORD: ${DB_PASSWORD}
-      # Webhook настройки
+      # Webhook настройки - ФИКСИРОВАННО на 8001
       WEBHOOK_ENABLED: 'true'
       WEBHOOK_HOST: 0.0.0.0
-      WEBHOOK_PORT: 8001  # Согласованно с .env.production
+      WEBHOOK_PORT: 8001
       ADMIN_IDS: ${ADMIN_IDS}
       # Оптимизация Python
       PYTHONUNBUFFERED: 1
@@ -77,7 +77,7 @@ services:
       NUMPY_EXPERIMENTAL_ARRAY_FUNCTION: 0
     command: python main.py
     volumes:
-      - ../bot_model:/app/bot_model
+      - ./bot_model:/app/bot_model
       - ml_data:/app/ml
       - bot_logs:/app/logs
       - bot_data:/app/data
@@ -113,7 +113,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ../nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./nginx/default.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
       - okypbot
     networks:
