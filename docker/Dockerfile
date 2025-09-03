@@ -78,8 +78,9 @@ RUN pip install --no-cache-dir \
 # Устанавливаем PyTorch CPU версию
 RUN pip install --no-cache-dir torch==2.0.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
 
-# Устанавливаем остальные зависимости (исключая уже установленные ML библиотеки)
-RUN pip install --no-cache-dir $(grep -v -E "(numpy|scikit-learn|scipy|pandas|joblib|torch)" requirements.txt)
+# Создаем временный файл с отфильтрованными зависимостями (исключая ML библиотеки и комментарии)
+RUN grep -v -E "^#|^$|numpy|scikit-learn|scipy|pandas|joblib|torch" requirements.txt > /tmp/filtered_requirements.txt && \
+    pip install --no-cache-dir -r /tmp/filtered_requirements.txt
 
 # Финальный образ
 FROM base AS production
