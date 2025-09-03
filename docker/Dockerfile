@@ -130,7 +130,10 @@ RUN ls -la /app/bot_model/ || true && \
         touch /app/bot_model/training_examples.pkl && \
         chown app:app /app/bot_model/training_examples.pkl && \
         chmod 666 /app/bot_model/training_examples.pkl; \
-    fi
+    fi && \
+    # Исправляем права на все важные директории после копирования
+    chown -R app:app /app/data /app/logs /app/temp /app/cache /tmp/okypbot_examples && \
+    chmod -R 777 /app/bot_model /app/logs /app/data /app/temp /app/cache /tmp/okypbot_examples
 
 
 # Проверка наличия numpy в venv

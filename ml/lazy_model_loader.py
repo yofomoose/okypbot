@@ -14,11 +14,6 @@ logger = logging.getLogger(__name__)
 
 try:
     import numpy as np
-    import numpy.core
-    from numpy.core import multiarray
-    from numpy.core import numeric
-    from numpy.core import _multiarray_umath
-    np._core = numpy.core  # Важный хак для поддержки pickle
     logger.info(f"NumPy {np.__version__} инициализирован для загрузки моделей")
 except ImportError as e:
     logger.error(f"Ошибка инициализации NumPy: {e}")

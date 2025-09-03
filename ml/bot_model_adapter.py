@@ -14,13 +14,7 @@ from datetime import datetime
 # Пробуем импортировать все необходимые компоненты numpy
 try:
     import numpy as np
-    import numpy.core
-    from numpy.core import multiarray
-    from numpy.core import numeric
-    from numpy.core._multiarray_umath import *
-    from numpy.core import _multiarray_umath
-    np._core = numpy.core  # Важный хак для поддержки pickle
-    logging.info(f"NumPy {np.__version__} инициализирован со всеми компонентами")
+    logging.info(f"NumPy {np.__version__} инициализирован")
 except ImportError as e:
     logging.error(f"Ошибка инициализации NumPy: {e}")
     np = None
@@ -61,8 +55,8 @@ class BotModelAdapter:
             # Проверяем numpy и системные зависимости
             try:
                 # Проверка базовых компонентов numpy
-                if np is None or not hasattr(np, '_core'):
-                    raise ImportError("NumPy не инициализирован или отсутствуют критические компоненты")
+                if np is None:
+                    raise ImportError("NumPy не установлен")
 
                 # Проверка версии numpy
                 np_version = tuple(map(int, np.__version__.split('.')))
@@ -70,23 +64,11 @@ class BotModelAdapter:
                 if np_version < min_version:
                     raise ImportError(f"Требуется numpy >= {'.'.join(map(str, min_version))}, установлено {np.__version__}")
                 
-                # Проверка критических компонентов и операций
-                try:
-                    import numpy.core._multiarray_umath
-                    np.zeros(1, dtype=np.float64)  # Проверка базовых операций
-                    np.array([1, 2, 3])  # Проверка создания массива
-                    # Проверяем доступность всех необходимых модулей
-                    from numpy.core import multiarray
-                    from numpy.core import numeric
-                    import numpy.core._multiarray_umath as umath
-                    
-                    # Устанавливаем важные атрибуты для поддержки pickle
-                    if not hasattr(np, '_core'):
-                        np._core = numpy.core
-                except ImportError as e:
-                    raise ImportError(f"Отсутствует критический компонент numpy: {e}")
+                # Проверка базовых операций
+                np.zeros(1, dtype=np.float64)  # Проверка базовых операций
+                np.array([1, 2, 3])  # Проверка создания массива
                 
-                logger.info(f"Numpy {np.__version__} успешно проверен со всеми компонентами")
+                logger.info(f"Numpy {np.__version__} успешно проверен")
                 
             except Exception as e:
                 logger.error(f"Ошибка проверки numpy: {e}")
