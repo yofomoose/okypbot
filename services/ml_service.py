@@ -83,14 +83,26 @@ class MLService:
             classification_id = None
             try:
                 from services.ml_stats_service import ml_stats_service
-                classification_id = ml_stats_service.save_classification(
-                    text=issue_text,
-                    predicted_category=category,
-                    confidence=confidence,
-                    user_id=user_id or 0,
-                    telegram_user_id=user_id or 0,
-                    processing_time=processing_time
-                )
+                # Проверяем, что user_id является валидным Telegram ID
+                valid_user_id = None
+                if user_id and isinstance(user_id, int) and user_id > 0 and user_id < 10**10:
+                    valid_user_id = user_id
+                elif user_id and isinstance(user_id, str) and user_id.isdigit():
+                    temp_id = int(user_id)
+                    if temp_id > 0 and temp_id < 10**10:
+                        valid_user_id = temp_id
+                
+                if valid_user_id:
+                    classification_id = ml_stats_service.save_classification(
+                        text=issue_text,
+                        predicted_category=category,
+                        confidence=confidence,
+                        user_id=valid_user_id,
+                        telegram_user_id=valid_user_id,
+                        processing_time=processing_time
+                    )
+                else:
+                    logger.debug(f"Пропуск сохранения в БД: некорректный user_id={user_id}")
             except Exception as db_error:
                 logger.warning(f"Не удалось сохранить в БД: {db_error}")
             

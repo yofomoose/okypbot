@@ -63,27 +63,23 @@ ENV NPY_NUM_BUILD_JOBS=4 \
     NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=0 \
     OPENBLAS_NUM_THREADS=1
 
-# Устанавливаем numpy из исходников
+# Устанавливаем numpy отдельно с совместимой версией
 RUN pip install --no-cache-dir numpy==1.24.3 --no-binary numpy && \
-    python -m pip install --upgrade pip && \
-    python -c "import numpy; from numpy.core import numeric, multiarray; print('NumPy установлен успешно:', numpy.__version__)"
+    python -c "import numpy; print('NumPy установлен успешно:', numpy.__version__)"
 
-# Устанавливаем остальные зависимости
-RUN pip install --no-cache-dir -r requirements.txt
-
-# Проверяем полную установку numpy и его компонентов
-# Устанавливаем ML зависимости
+# Устанавливаем ML зависимости (исключая numpy, так как уже установлен)
 RUN pip install --no-cache-dir \
-    "scikit-learn==1.3.0" \
+    "scikit-learn==1.4.0" \
     "scipy==1.11.2" \
-    "cython>=0.29.0" && \
-    python -c "import numpy, scipy, sklearn; print(f'NumPy {numpy.__version__}, SciPy {scipy.__version__}, Scikit-learn {sklearn.__version__} installed successfully')"
+    "pandas==2.0.3" \
+    "joblib==1.3.2" && \
+    python -c "import numpy, scipy, sklearn, pandas; print('ML dependencies installed successfully')"
 
 # Устанавливаем PyTorch CPU версию
 RUN pip install --no-cache-dir torch==2.0.1+cpu -f https://download.pytorch.org/whl/torch_stable.html
 
-# Устанавливаем остальные зависимости
-RUN pip install --no-cache-dir -r requirements.txt
+# Устанавливаем остальные зависимости (исключая уже установленные ML библиотеки)
+RUN pip install --no-cache-dir $(grep -v -E "(numpy|scikit-learn|scipy|pandas|joblib|torch)" requirements.txt)
 
 # Финальный образ
 FROM base AS production
