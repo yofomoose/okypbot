@@ -2,6 +2,7 @@
 Модуль для регистрации всех обработчиков в main.py
 """
 
+from handlers.main import router as main_router
 from handlers.admin_handlers import router as admin_router
 from handlers.registration import router as registration_router
 from handlers.issue_handlers import router as issue_router
@@ -14,6 +15,7 @@ from handlers.admin_stats import router as admin_stats_router
 from handlers.employee_mapping_handlers import router as employee_mapping_router
 
 routers = [
+    main_router,
     admin_router,
     registration_router,
     issue_router,

@@ -23,22 +23,6 @@ def is_admin(user_id: int) -> bool:
     """Проверяет, является ли пользователь админом"""
     return user_id in ADMIN_IDS
 
-# Регистрируем обработчики из issue_handlers, если модуль доступен
-try:
-    from handlers.issue_handlers import router as issue_router
-    router.include_router(issue_router)
-    logger.info("Обработчики создания заявок подключены")
-except ImportError:
-    logger.warning("Модуль issue_handlers недоступен, используется базовая функциональность")
-
-# Регистрируем обработчики bot_model
-try:
-    from handlers.bot_model_handlers import router as bot_model_router
-    router.include_router(bot_model_router)
-    logger.info("Обработчики bot_model подключены")
-except ImportError:
-    logger.warning("Модуль bot_model_handlers недоступен")
-
 def check_registration(func):
     """Декоратор для проверки регистрации пользователя (админы пропускаются)"""
     async def wrapper(event, *args, **kwargs):
